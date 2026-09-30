@@ -1,4 +1,4 @@
-# Teorema Fundamental das Curvas no Espaço
+# Teorema Fundamental de Curvas (Fundamental Theorem of Curves)
 ### Reconstrução de Curvas no $\mathbb{R}^3$, Integração de Frenet-Serret e Visualização Diferencial Interativa
 
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
@@ -6,7 +6,7 @@
 [![SciPy](https://img.shields.io/badge/SciPy-1.10%2B-8CAAE6.svg?logo=scipy)](https://scipy.org/)
 [![SymPy](https://img.shields.io/badge/SymPy-1.12%2B-3B5526.svg?logo=sympy)](https://www.sympy.org/)
 [![Plotly](https://img.shields.io/badge/Plotly-5.15%2B-3F4F75.svg?logo=plotly)](https://plotly.com/)
-[![Tests](https://img.shields.io/badge/Tests-232%20passed-success.svg)](https://github.com/gabe-rbo/Teorema-Fundamental-de-Curvas)
+[![Tests](https://img.shields.io/badge/Tests-235%20passed-success.svg)](https://github.com/gabe-rbo/Teorema-Fundamental-de-Curvas)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Uma ferramenta computacional e acadêmica em Python que reconstrói curvas planas e espaciais no $\mathbb{R}^3$ a partir de suas funções intrínsecas de **curvatura** $\kappa(s)$ e **torção** $\tau(s)$ parametrizadas pelo comprimento de arco $s$. O sistema integra numericamente o sistema diferencial de **Frenet-Serret** no grupo de Lie $\mathrm{SO}(3)$, aplica ortonormalização contínua de Gram-Schmidt, classifica deterministicamente a curva em 8 famílias geométricas (incluindo o Teorema de Lancret) e gera uma aplicação web interativa em **Plotly HTML full-screen** (`100vw` $\times$ `100vh`) com aparato de Frenet dinâmico, planos osculador, normal e retificante, círculo osculador, slider contínuo e navegação por clique na curva.
@@ -42,7 +42,7 @@ Uma ferramenta computacional e acadêmica em Python que reconstrói curvas plana
    - [Adaptação para Curvas Planas (Diedro de Frenet)](#adaptação-para-curvas-planas-diedro-de-frenet)
    - [Cartão Flutuante HUD (Heads-Up Display)](#cartão-flutuante-hud-heads-up-display)
 6. [Arquitetura de Software e Motor Matemático](#arquitetura-de-software-e-motor-matemático)
-7. [Bateria de Testes Automatizados (232 Testes)](#bateria-de-testes-automatizados-232-testes)
+7. [Bateria de Testes Automatizados (235 Testes)](#bateria-de-testes-automatizados-235-testes)
 
 ---
 
@@ -51,12 +51,14 @@ Uma ferramenta computacional e acadêmica em Python que reconstrói curvas plana
 ### Enunciado do Teorema Fundamental das Curvas
 
 > **Teorema Fundamental da Teoria Local de Curvas no $\mathbb{R}^3$ (Existência e Unicidade):**
-> Sejam $\kappa, \tau: [s_0, s_1] \to \mathbb{R}$ funções de classe $C^1$ (ou contínuas), tais que $\kappa(s) > 0$ para todo $s \in [s_0, s_1]$.
+> Sejam $\kappa, \tau: [s_0, s_1] \to \mathbb{R}$ funções de classe $C^1$ (ou contínuas), tais que $\kappa(s) > 0$ para todo $s \in [s_0, s_1]$ (cf. **do Carmo**, 2016, Seção 1-5; **Tenenblat**, 2008, Cap. 2; **Toponogov**, 2006, Seção 1.3; **Alencar & Santos**, 2009, Cap. 2).
 > 1. **Existência:** Existe uma curva parametrizada pelo comprimento de arco $r: [s_0, s_1] \to \mathbb{R}^3$ de classe $C^3$ cuja curvatura é $\kappa(s)$ e cuja torção é $\tau(s)$.
 > 2. **Unicidade a Menos de Movimento Rígido:** Se $\tilde{r}: [s_0, s_1] \to \mathbb{R}^3$ for outra curva com as mesmas funções de curvatura e torção, então existe uma isometria euclidiana direta própria $M \in \mathrm{SE}(3)$ (composta por uma rotação $R \in \mathrm{SO}(3)$ e uma translação $v \in \mathbb{R}^3$) tal que:
 >    $$\tilde{r}(s) = R \, r(s) + v, \quad \forall s \in [s_0, s_1].$$
 
-Pelo Teorema de Picard-Lindelöf (ou Cauchy-Lipschitz), dado um referencial inicial ortonormal orientado positivamente $\{T(s_0), N(s_0), B(s_0)\} \in \mathrm{SO}(3)$ e um ponto inicial $r(s_0) = r_0 \in \mathbb{R}^3$, o problema de valor inicial linear possui solução única global em todo o intervalo $[s_0, s_1]$.
+Pelo Teorema de Picard-Lindelöf (ou Cauchy-Lipschitz), dado um referencial inicial ortonormal orientado positivamente $\{T(s_0), N(s_0), B(s_0)\} \in \mathrm{SO}(3)$ e um ponto inicial $r(s_0) = r_0 \in \mathbb{R}^3$, o problema de valor inicial linear possui solução única global em todo o intervalo $[s_0, s_1]$. No referencial canônico padrão adotado:
+$$r(s_0) = (0, 0, 0)^T, \quad T(s_0) = (1, 0, 0)^T, \quad N(s_0) = (0, 1, 0)^T, \quad B(s_0) = (0, 0, 1)^T$$
+(para curvas puramente planas com $\tau(s) \equiv 0$, a curva desenvolve-se no plano $xy$ sob o diedro $\{T, N\}$).
 
 ### Sistema Diferencial de Frenet-Serret
 
@@ -65,7 +67,7 @@ O triedro móvel de Frenet é constituído pelos vetores unitários ortogonais:
 - **Vetor Normal Principal:** $N(s) = \frac{1}{\kappa(s)} \frac{dT}{ds}(s)$
 - **Vetor Binormal:** $B(s) = T(s) \times N(s)$
 
-As taxas de variação desses vetores com respeito ao comprimento de arco $s$ satisfazem as célebres **Equações de Frenet-Serret**:
+As taxas de variação desses vetores com respeito ao comprimento de arco $s$ satisfazem as célebres **Equações de Frenet-Serret** (**do Carmo**, 2016; **Tenenblat**, 2008):
 
 $$\begin{aligned}
 \frac{dr}{ds} &= T(s) \\
@@ -94,7 +96,7 @@ Em integrações numéricas, acumulações de erro de ponto flutuante podem degr
 
 ### Vetor de Darboux e Rotação Instantânea
 
-A rotação instantânea do triedro de Frenet à medida que o referencial percorre a curva com velocidade unitária é descrita pelo **Vetor de Darboux** $\omega(s) \in \mathbb{R}^3$:
+A rotação instantânea do triedro de Frenet à medida que o referencial percorre a curva com velocidade unitária é descrita pelo **Vetor de Darboux** $\omega(s) \in \mathbb{R}^3$ (**Alencar & Santos**, 2009; **do Carmo**, 2016):
 
 $$\omega(s) = \tau(s) T(s) + \kappa(s) B(s)$$
 
@@ -106,15 +108,16 @@ A norma do vetor de Darboux $\|\omega(s)\| = \sqrt{\kappa(s)^2 + \tau(s)^2}$ rep
 
 ### Aparato Diferencial: Planos Fundamentais e Círculo Osculador
 
-Para cada ponto $r(s)$ com $\kappa(s) > 0$, definem-se os seguintes elementos geométricos locais:
+Para cada ponto $r(s)$ com $\kappa(s) > 0$, definem-se os seguintes elementos geométricos locais do aparato diferencial:
 
 | Elemento | Vetor Normal | Equação do Plano / Conjunto | Significado Geométrico |
 |---|:---:|:---:|---|
-| **Plano Osculador** | $B(s)$ | $(X - r(s)) \cdot B(s) = 0$ | Plano que melhor aproxima a curva na vizinhança de $r(s)$ (ordem de contato $\ge 2$). Gerado por $\{T, N\}$. |
-| **Plano Normal** | $T(s)$ | $(X - r(s)) \cdot T(s) = 0$ | Plano ortogonal à direção de propagação $T(s)$. Gerado por $\{N, B\}$. |
-| **Plano Retificante** | $N(s)$ | $(X - r(s)) \cdot N(s) = 0$ | Plano ortogonal à aceleração normal. Contém a direção tangente $T$ e a binormal $B$. |
-| **Reta Tangente** | — | $L_T(u) = r(s) + u \, T(s), \quad u \in \mathbb{R}$ | Direção infinitesimal de deslocamento da curva. |
-| **Círculo Osculador** | $B(s)$ | Centro $c(s) = r(s) + \rho(s) N(s)$, Raio $\rho(s) = \frac{1}{\|\kappa(s)\|}$ | Círculo no plano osculador com contato de segunda ordem com a curva em $r(s)$. |
+| **Plano Osculador** | $B(s)$ | $(X - r(s)) \cdot B(s) = 0$ | Plano que melhor aproxima a curva na vizinhança de $r(s)$ (ordem de contato $\ge 2$). Gerado por $\{T(s), N(s)\}$. |
+| **Plano Normal** | $T(s)$ | $(X - r(s)) \cdot T(s) = 0$ | Plano ortogonal à direção de propagação $T(s)$. Gerado por $\{N(s), B(s)\}$. |
+| **Plano Retificante** | $N(s)$ | $(X - r(s)) \cdot N(s) = 0$ | Plano ortogonal à aceleração normal. Contém a direção tangente $T(s)$ e a binormal $B(s)$. |
+| **Reta Tangente** | — | $L_T(u) = r(s) + u \, T(s), \quad u \in \mathbb{R}$ | Direção infinitesimal de velocidade e deslocamento tangencial da curva. |
+| **Círculo Osculador** | $B(s)$ | Centro $c(s) = r(s) + \rho(s) N(s)$, Raio $\rho(s) = \frac{1}{\|\kappa(s)\|}$ | Círculo no plano osculador com contato de **segunda ordem** com a curva em $r(s)$ (mesma posição $r(s)$, mesma tangente unitária $T(s)$ e mesma curvatura $\kappa(s)$). |
+
 
 ### Referências Bibliográficas
 
@@ -192,6 +195,20 @@ Caracteres especiais são substituídos de forma segura para compatibilidade com
 ## Galeria das 8 Famílias de Curvas Suportadas
 
 O motor de classificação analisa simbolicamente e numericamente as funções $\kappa(s)$ e $\tau(s)$, identificando a família geométrica exata:
+
+### Tabela de Classificação das 8 Famílias Geométricas
+
+| # | Identificador (`classe`) | Condição de Curvatura $\kappa(s)$ | Condição de Torção $\tau(s)$ | Descrição Geométrica & Teorema | Exemplo de Execução CLI |
+|:---:|---|---|---|---|---|
+| 1 | `reta` | $\kappa(s) \equiv 0$ | $\tau(s) \equiv 0$ | Segmento linear geodésico no $\mathbb{R}^3$ | `"0"` `"0"` |
+| 2 | `circulo` | $\kappa(s) \equiv c > 0$ | $\tau(s) \equiv 0$ | Circunferência planar de raio $R = 1/c$ | `"1"` `"0"` |
+| 3 | `helice_circular` | $\kappa(s) \equiv c_1 > 0$ | $\tau(s) \equiv c_2 \neq 0$ | Hélice sobre cilindro circular reto | `"1"` `"1"` |
+| 4 | `helice_cilindrica_geral` | $\kappa(s) > 0$ | $\frac{\tau(s)}{\kappa(s)} \equiv c \neq 0$ | Hélice cilíndrica geral (**Teorema de Lancret**, 1802) | `"1 + 0.1*sin(s)"` `"2*(1 + 0.1*sin(s))"` |
+| 5 | `espiral_de_cornu` | $\kappa(s) = c \cdot s$ | $\tau(s) \equiv 0$ | Clotoide / Espiral de Euler-Cornu | `"s"` `"0"` |
+| 6 | `espiral_logaritmica` | $\kappa(s) = \frac{1}{as+b}$ | $\tau(s) \equiv 0$ | Espiral logarítmica equiangular planar | `"1/(s + 1)"` `"0"` |
+| 7 | `curva_plana` | $\kappa(s)$ arbitrária | $\tau(s) \equiv 0$ | Curva planar geral imersa em $\mathbb{R}^2$ | `"2 + sin(s)"` `"0"` |
+| 8 | `curva_espacial` | $\kappa(s)$ arbitrária | $\tau(s) \not\equiv 0$ | Curva espacial tridimensional genérica | `"1 + 0.5*cos(s)"` `"0.5*s"` |
+
 
 ### 1. Reta ($\kappa = 0, \tau = 0$)
 Quando a curvatura é identicamente nula, a curva não acelera transversalmente e reduz-se a um segmento linear ao longo do vetor tangente inicial.
@@ -341,20 +358,21 @@ O projeto segue rigorosos princípios de separação de responsabilidades e robu
 
 ---
 
-## Bateria de Testes Automatizados (232 Testes)
+## Bateria de Testes Automatizados (235 Testes)
 
-O projeto conta com uma suíte exaustiva de testes automatizados com `pytest`, totalizando **232 testes rigorosos** aprovados sem falhas.
+O projeto conta com uma suíte exaustiva de testes automatizados com `pytest`, totalizando **235 testes rigorosos** aprovados com 100% de êxito.
 
 ### Estrutura dos Níveis de Teste
 
 | Nível (Tier) | Arquivo de Teste | Qtd | Escopo Verificado |
 |---|---|:---:|---|
-| **Tier 1** | `test_teorema_fundamental.py` | 35 | Cobertura funcional básica de reconstrução matemática, classificação e CLI. |
-| **Tier 2** | `test_teorema_fundamental.py` | 28 | Casos de borda: $\kappa = 0$, singularidades, domínios negativos, limites. |
-| **Tier 3** | `test_teorema_fundamental.py` | 15 | Combinações cruzadas entre diversas classes de curvatura e torção. |
-| **Tier 4** | `test_teorema_fundamental.py` | 12 | Benchmarks analíticos com tolerâncias $< 10^{-3}$ (semicírculo, hélice, etc.). |
-| **Tier 5 & Adversarial** | `test_adversarial_tier5.py`, `test_adversarial_m4.py`, `test_curva_engine_stress.py`, `test_curva_viz_stress.py` | 142 | Testes de estresse de AST, injeção de código, resiliência do visualizador, matrizes $SO(3)$ e integradores sob condições extremas. |
-| **Total** | — | **232** | **100% dos testes aprovados.** |
+| **Modelos Oráculo & Álgebra** | `test_teorema_fundamental.py` | 4 | Verificação de formas fechadas analíticas e ortonormalização $SO(3)$ exata. |
+| **Tier 1 (Funcional)** | `test_teorema_fundamental.py` | 32 | Cobertura de integração ODE, frames ortonormais, classificação das 8 famílias, CLI e HTML. |
+| **Tier 2 (Casos de Borda)** | `test_teorema_fundamental.py` | 16 | Casos limites: $\kappa = 0$, singularidades, domínios negativos, validação de AST contra injeção. |
+| **Tier 3 (Combinações Cruzadas)** | `test_teorema_fundamental.py` | 5 | Curvatura/torção variáveis, Teorema de Lancret, espirais de Cornu e logarítmica. |
+| **Tier 4 (Benchmarks Analíticos)** | `test_teorema_fundamental.py` | 7 | Precisão analítica $< 10^{-3}$ (semicírculo $R=0.5$, hélice circular, isometria $SE(3)$, clotoide). |
+| **Tier 5 & Hardening Adversarial** | `test_adversarial_tier5.py`, `test_adversarial_m4.py`, `test_curva_engine_stress.py`, `test_curva_viz_stress.py`, `test_adversarial_m2.py` | 171 | Testes adversariais de AST, resiliência do visualizador Plotly, estabilidade numérica de integradores e segurança. |
+| **Total** | — | **235** | **100% dos testes aprovados.** |
 
 ### Como Executar os Testes
 
@@ -363,7 +381,7 @@ Para executar toda a suíte de testes com relatório verboso:
 pytest -v
 ```
 
-Para executar apenas os testes analíticos fundamentais:
+Para executar apenas a suíte de integração e benchmarks analíticos fundamentais:
 ```bash
 pytest -v tests/test_teorema_fundamental.py
 ```
