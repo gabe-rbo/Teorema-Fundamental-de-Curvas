@@ -51,7 +51,7 @@ Uma ferramenta computacional e acadêmica em Python que reconstrói curvas plana
 ### Enunciado do Teorema Fundamental das Curvas
 
 > **Teorema Fundamental da Teoria Local de Curvas no $\mathbb{R}^3$ (Existência e Unicidade):**
-> Sejam $\kappa, \tau: [s_0, s_1] \to \mathbb{R}$ funções de classe $C^1$ (ou contínuas), tais que $\kappa(s) > 0$ para todo $s \in [s_0, s_1]$ (cf. **do Carmo**, 2016, Seção 1-5; **Tenenblat**, 2008, Cap. 2; **Toponogov**, 2006, Seção 1.3; **Alencar & Santos**, 2009, Cap. 2).
+> Sejam $\kappa, \tau: [s_0, s_1] \to \mathbb{R}$ funções de classe $C^1$ (ou contínuas), tais que $\kappa(s) > 0$ para todo $s \in [s_0, s_1]$ (cf. **do Carmo**, 1976/2016, Seção 1-5; **Tenenblat**, 2008, Cap. 2; **Toponogov**, 2006, Seção 1.3; **Alencar, Santos & Frensel**, 2011, Cap. 2).
 > 1. **Existência:** Existe uma curva parametrizada pelo comprimento de arco $r: [s_0, s_1] \to \mathbb{R}^3$ de classe $C^3$ cuja curvatura é $\kappa(s)$ e cuja torção é $\tau(s)$.
 > 2. **Unicidade a Menos de Movimento Rígido:** Se $\tilde{r}: [s_0, s_1] \to \mathbb{R}^3$ for outra curva com as mesmas funções de curvatura e torção, então existe uma isometria euclidiana direta própria $M \in \mathrm{SE}(3)$ (composta por uma rotação $R \in \mathrm{SO}(3)$ e uma translação $v \in \mathbb{R}^3$) tal que:
 >    $$\tilde{r}(s) = R \, r(s) + v, \quad \forall s \in [s_0, s_1].$$
@@ -96,7 +96,7 @@ Em integrações numéricas, acumulações de erro de ponto flutuante podem degr
 
 ### Vetor de Darboux e Rotação Instantânea
 
-A rotação instantânea do triedro de Frenet à medida que o referencial percorre a curva com velocidade unitária é descrita pelo **Vetor de Darboux** $\omega(s) \in \mathbb{R}^3$ (**Alencar & Santos**, 2009; **do Carmo**, 2016):
+A rotação instantânea do triedro de Frenet à medida que o referencial percorre a curva com velocidade unitária é descrita pelo **Vetor de Darboux** $\omega(s) \in \mathbb{R}^3$ (**Alencar, Santos & Frensel**, 2011; **do Carmo**, 1976/2016):
 
 $$\omega(s) = \tau(s) T(s) + \kappa(s) B(s)$$
 
@@ -121,11 +121,11 @@ Para cada ponto $r(s)$ com $\kappa(s) > 0$, definem-se os seguintes elementos ge
 
 ### Referências Bibliográficas
 
-1. **Toponogov, V. A.** (2006). *Differential Geometry of Curves and Surfaces: A Concise Guide*. Birkhäuser Boston. ISBN: 978-0-8176-4384-3.
-2. **Tenenblat, Keti** (2008). *Introdução à Geometria Diferencial*. Editora Edgard Blücher, 2ª edição. ISBN: 978-85-212-0457-2.
-3. **Alencar, Hilário & Santos, Walcy** (2009). *Geometria Diferencial: Curvas e Superfícies*. Coleção Textos Universitários, SBM (Sociedade Brasileira de Matemática).
-4. **do Carmo, Manfredo P.** (2016). *Differential Geometry of Curves and Surfaces: Revised and Updated Second Edition*. Dover Publications (original Prentice-Hall 1976). ISBN: 978-0-486-80699-0.
-5. **Lancret, Michel Ange** (1802). *Mémoire sur les courbes à double courbure*. Mémoires présentés à l'Institut des Sciences, Lettres et Arts par divers savants, t. I, Paris, pp. 416–454.
+1. **Toponogov, V. A.** (2006). *Differential Geometry of Curves and Surfaces: A Concise Guide*. Birkhäuser, Boston. ISBN: 978-0-8176-4384-3.
+2. **Tenenblat, K.** (2008). *Introdução à Geometria Diferencial*. Edgard Blücher / Editora UnB, 2ª edição. ISBN: 978-85-212-0457-2.
+3. **Alencar, H., Santos, W., Frensel, K.** (2011). *Geometria Diferencial das Curvas*. IMPA (Instituto de Matemática Pura e Aplicada), Rio de Janeiro. ISBN: 978-85-244-0331-6.
+4. **do Carmo, M. P.** (1976). *Differential Geometry of Curves and Surfaces*. Prentice-Hall (reedição revisada Dover Publications, 2016). ISBN: 978-0-486-80699-0.
+5. **Lancret, M. A.** (1806). *Mémoire sur les courbes à double courbure*. Mémoires présentés à l'Institut d'Égypte / Mémoires des savants étrangers, t. I, Paris, pp. 416–454 (apresentado em 1802).
 
 ---
 
@@ -353,8 +353,24 @@ O projeto segue rigorosos princípios de separação de responsabilidades e robu
 └───────────────────────────┘ └───────────────────────────┘
 ```
 
-- **Segurança de Expressões (AST Whitelist):** Expressões arbitrárias fornecidas pelo usuário são previamente analisadas sintaticamente via módulo `ast` do Python. Nós permitidos restringem-se a operações aritméticas, constantes numéricas e funções transcendentais autorizadas (`sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `sinh`, `cosh`, `tanh`, `asin`, `acos`, `atan`, `abs`). Quaisquer chamadas a `__import__`, `eval`, `exec` ou acesso a atributos privados são prontamente bloqueadas antes da avaliação.
-- **Integração Numérica com Tolerâncias Estritas:** O integrador `scipy.integrate.solve_ivp` opera com método de Runge-Kutta de alta ordem (DOP853 ou RK45), tolerância relativa $rtol = 10^{-9}$ e absoluta $atol = 10^{-9}$.
+### Módulos do Sistema e Responsabilidades
+
+- **`teorema-fundamental-curvas.py`**: Ponto de entrada CLI (*Command Line Interface*), suportando argumentos posicionais e flags opcionais (`-k`, `-t`, `-i`, `-n`, `-o`), validação rigorosa de limites de intervalo contra injeção de código, tratamento de exceções amigável ao usuário e códigos de saída semânticos (0, 1, 2).
+- **`curva_engine.py`**: Motor analítico e numérico contendo:
+  - *Análise Segura de Expressões (AST Whitelist)*: Bloqueio estrito de chamadas a `__import__`, `eval`, `exec` ou acesso a atributos privados, autorizando apenas operações aritméticas e funções transcendentais válidas.
+  - *Pré-checagem de Singularidades*: Verificação analítica e numérica prévia de divisões por zero ou singularidades no domínio de integração.
+  - *Integrador Numérico de EDOs*: Integração de alta ordem com `scipy.integrate.solve_ivp` (métodos DOP853 ou RK45, tolerâncias $rtol = 10^{-9}$ e $atol = 10^{-9}$).
+  - *Preservação da Estrutura $SO(3)$*: Ortonormalização contínua de Gram-Schmidt Modificado restaurando a binormal por $B = T \times N$ e garantindo $\det(F(s)) = +1$ e $\|T\|=\|N\|=\|B\|=1$ a cada passo.
+  - *Classificador Determinístico*: Identificação exata da geometria intrínseca em 8 classes.
+  - *Geração de Nomenclatura Higienizada*: Formatação padronizada e segura de nomes de arquivo.
+- **`curva_viz.py`**: Gerador da cena interativa em Plotly:
+  - *Cena Composta de 10 Traços*: Renderização da trajetória da curva, ponto ativo, triedro unitário $\{T, N, B\}$, reta tangente, planos osculador, normal e retificante, e círculo osculador.
+  - *Adaptação para Curvas Planas*: Detecção automática de $\tau \equiv 0$ com visualização em diedro $\{T, N\}$ e câmera top-down.
+  - *Animação e Slider Otimizados*: Frames seletivos de animação que atualizam apenas a geometria dinâmica sem sobrecarregar a memória da GPU.
+  - *Shell HTML Responsivo*: Layout dinâmico sem barras de rolagem ocupando `100vw` $\times$ `100vh` (`100dvh`).
+  - *Injeção de JavaScript Customizado*: Listener de redimensionamento de janela, sincronização do slider inferior e navegação click-to-point via evento `plotly_click` com dados mapeados por `customdata`.
+  - *HUD Glassmorphic*: Cartão flutuante estilizado exibindo grandezas métricas locais em tempo real.
+- **`tests/`**: Suíte de testes abrangente com 235 testes automatizados (64 testes funcionais e E2E, 29 testes de segurança adversarial, benchmarks analíticos com erro $< 10^{-3}$ e testes de estresse para os módulos engine e viz).
 
 ---
 
