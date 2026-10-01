@@ -588,7 +588,7 @@ def _build_planar_2d_figure(
                     [frame_name],
                     {
                         "mode": "immediate",
-                        "frame": {"duration": 0, "redraw": True},
+                        "frame": {"duration": 0, "redraw": False},
                         "transition": {"duration": 0},
                     },
                 ],
@@ -639,7 +639,7 @@ def _build_planar_2d_figure(
                 args=[
                     None,
                     {
-                        "frame": {"duration": 35, "redraw": True},
+                        "frame": {"duration": 35, "redraw": False},
                         "fromcurrent": True,
                         "transition": {"duration": 0},
                         "mode": "immediate",
@@ -667,6 +667,34 @@ def _build_planar_2d_figure(
     )
     final_title = title or f"Teorema Fundamental das Curvas Planas — {class_title} (2D)"
 
+    # Stable 2D bounding box covering the entire curve plus apparatus
+    x_min_c, x_max_c = float(np.min(r[0, :])), float(np.max(r[0, :]))
+    y_min_c, y_max_c = float(np.min(r[1, :])), float(np.max(r[1, :]))
+    init_xs = [x_min_c, x_max_c, float(r[0, idx0] - L_tan), float(r[0, idx0] + L_tan)]
+    init_ys = [y_min_c, y_max_c, float(r[1, idx0] - L_tan), float(r[1, idx0] + L_tan)]
+
+    k0 = float(kappa[idx0])
+    if abs(k0) > 1e-5:
+        rho0 = 1.0 / abs(k0)
+        if rho0 <= 3.0 * span:
+            c0 = r[:2, idx0] + (1.0 / k0) * N_mat[:2, idx0]
+            init_xs.extend([float(c0[0] - rho0), float(c0[0] + rho0)])
+            init_ys.extend([float(c0[1] - rho0), float(c0[1] + rho0)])
+
+    x_min_all = min(init_xs)
+    x_max_all = max(init_xs)
+    y_min_all = min(init_ys)
+    y_max_all = max(init_ys)
+    span_x = x_max_all - x_min_all
+    span_y = y_max_all - y_min_all
+    max_span = max(span_x, span_y, 0.1)
+    pad = 0.15 * max_span
+    x_mid = 0.5 * (x_min_all + x_max_all)
+    y_mid = 0.5 * (y_min_all + y_max_all)
+    half_len = 0.5 * max_span + pad
+    x_range = [float(x_mid - half_len), float(x_mid + half_len)]
+    y_range = [float(y_mid - half_len), float(y_mid + half_len)]
+
     fig = go.Figure(data=fig_data, frames=frames)
     fig.update_layout(
         title=dict(
@@ -679,6 +707,9 @@ def _build_planar_2d_figure(
         uirevision="constant",
         xaxis=dict(
             title="X",
+            range=x_range,
+            autorange=False,
+            uirevision="constant",
             color="#64748b",
             gridcolor="rgba(0, 0, 0, 0.06)",
             zerolinecolor="rgba(0, 0, 0, 0.15)",
@@ -687,6 +718,9 @@ def _build_planar_2d_figure(
         ),
         yaxis=dict(
             title="Y",
+            range=y_range,
+            autorange=False,
+            uirevision="constant",
             color="#64748b",
             gridcolor="rgba(0, 0, 0, 0.06)",
             zerolinecolor="rgba(0, 0, 0, 0.15)",
@@ -1036,6 +1070,44 @@ def _build_spatial_3d_figure(
     )
     final_title = title or f"Teorema Fundamental de Curvas — {class_title}"
 
+    # Stable 3D bounding box covering the entire curve plus apparatus
+    x_min_c, x_max_c = float(np.min(r[0, :])), float(np.max(r[0, :]))
+    y_min_c, y_max_c = float(np.min(r[1, :])), float(np.max(r[1, :]))
+    z_min_c, z_max_c = float(np.min(r[2, :])), float(np.max(r[2, :]))
+
+    init_xs = [x_min_c, x_max_c, float(r[0, idx0] - W), float(r[0, idx0] + W)]
+    init_ys = [y_min_c, y_max_c, float(r[1, idx0] - W), float(r[1, idx0] + W)]
+    init_zs = [z_min_c, z_max_c, float(r[2, idx0] - W), float(r[2, idx0] + W)]
+
+    k0 = float(kappa[idx0])
+    if abs(k0) > 1e-5:
+        rho0 = 1.0 / abs(k0)
+        if rho0 <= 2.5 * span:
+            c0 = r[:, idx0] + (1.0 / k0) * N_mat[:, idx0]
+            init_xs.extend([float(c0[0] - rho0), float(c0[0] + rho0)])
+            init_ys.extend([float(c0[1] - rho0), float(c0[1] + rho0)])
+            init_zs.extend([float(c0[2] - rho0), float(c0[2] + rho0)])
+
+    x_min_all = min(init_xs)
+    x_max_all = max(init_xs)
+    y_min_all = min(init_ys)
+    y_max_all = max(init_ys)
+    z_min_all = min(init_zs)
+    z_max_all = max(init_zs)
+
+    span_x = x_max_all - x_min_all
+    span_y = y_max_all - y_min_all
+    span_z = z_max_all - z_min_all
+    max_span = max(span_x, span_y, span_z, 0.1)
+    pad = 0.15 * max_span
+    x_mid = 0.5 * (x_min_all + x_max_all)
+    y_mid = 0.5 * (y_min_all + y_max_all)
+    z_mid = 0.5 * (z_min_all + z_max_all)
+    half_len = 0.5 * max_span + pad
+    x_range = [float(x_mid - half_len), float(x_mid + half_len)]
+    y_range = [float(y_mid - half_len), float(y_mid + half_len)]
+    z_range = [float(z_mid - half_len), float(z_mid + half_len)]
+
     fig = go.Figure(data=fig_data, frames=frames)
     fig.update_layout(
         title=dict(
@@ -1048,10 +1120,12 @@ def _build_spatial_3d_figure(
         uirevision="constant",
         scene=dict(
             uirevision="constant",
-            aspectmode="data",
+            aspectmode="cube",
             camera=init_camera,
             xaxis=dict(
                 title="X",
+                range=x_range,
+                autorange=False,
                 color="#64748b",
                 gridcolor="rgba(0, 0, 0, 0.08)",
                 zerolinecolor="rgba(0, 0, 0, 0.2)",
@@ -1060,6 +1134,8 @@ def _build_spatial_3d_figure(
             ),
             yaxis=dict(
                 title="Y",
+                range=y_range,
+                autorange=False,
                 color="#64748b",
                 gridcolor="rgba(0, 0, 0, 0.08)",
                 zerolinecolor="rgba(0, 0, 0, 0.2)",
@@ -1068,6 +1144,8 @@ def _build_spatial_3d_figure(
             ),
             zaxis=dict(
                 title="Z",
+                range=z_range,
+                autorange=False,
                 color="#64748b",
                 gridcolor="rgba(0, 0, 0, 0.08)",
                 zerolinecolor="rgba(0, 0, 0, 0.2)",
@@ -1355,7 +1433,7 @@ function goToFrame(frameIdx) {{
   curFrame = frameIdx;
   Plotly.animate(gd, ["frame_" + frameIdx], {{
     mode: "immediate",
-    frame: {{ duration: 0, redraw: true }},
+    frame: {{ duration: 0, redraw: !isPlanar }},
     transition: {{ duration: 0 }}
   }});
   Plotly.relayout(gd, {{
@@ -1457,10 +1535,16 @@ function toggleSidebar() {{
   sb.classList.toggle("collapsed");
   var isCollapsed = sb.classList.contains("collapsed");
   if (openBtn) openBtn.style.display = isCollapsed ? "flex" : "none";
-  setTimeout(function() {{
+  var startTime = performance.now();
+  var duration = 320;
+  function stepResize(now) {{
     var gd = document.getElementById("fundamental_curve_plot");
     if (gd) Plotly.Plots.resize(gd);
-  }}, 320);
+    if (now - startTime < duration) {{
+      requestAnimationFrame(stepResize);
+    }}
+  }}
+  requestAnimationFrame(stepResize);
 }}
 
 var gd = document.getElementById("fundamental_curve_plot");
@@ -1616,27 +1700,29 @@ window.addEventListener("DOMContentLoaded", function() {{
     }}
     #app-layout {{
       display: flex;
+      flex-direction: row;
       width: 100vw;
       height: 100vh;
       height: 100dvh;
       position: relative;
       overflow: hidden;
     }}
-    /* Collapsible Sidebar */
+    /* Collapsible Sidebar (Right Side) */
     #sidebar {{
-      width: 350px;
-      min-width: 350px;
+      width: 360px;
+      min-width: 360px;
       height: 100%;
       background: var(--bg-sidebar);
-      border-right: 1px solid var(--border-ui);
+      border-left: 1px solid var(--border-ui);
       display: flex;
       flex-direction: column;
-      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 100;
-      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.03);
+      flex-shrink: 0;
+      transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 50;
+      box-shadow: -4px 0 24px rgba(0, 0, 0, 0.04);
     }}
     #sidebar.collapsed {{
-      margin-left: -350px;
+      margin-right: -360px;
     }}
     .sidebar-header {{
       padding: 18px 20px 14px 20px;
@@ -1895,9 +1981,9 @@ window.addEventListener("DOMContentLoaded", function() {{
       padding-top: 6px;
     }}
 
-    /* Main Plot Container */
+    /* Main Plot Container (Left Side) */
     #plot-container {{
-      flex: 1;
+      flex: 1 1 0%;
       min-width: 0;
       height: 100%;
       position: relative;
@@ -1920,7 +2006,8 @@ window.addEventListener("DOMContentLoaded", function() {{
     }}
     .modebar-container {{
       top: 14px !important;
-      right: 18px !important;
+      left: 18px !important;
+      right: auto !important;
       opacity: 0.65;
       transition: opacity 0.2s ease;
     }}
@@ -1932,7 +2019,7 @@ window.addEventListener("DOMContentLoaded", function() {{
     .sidebar-expand-btn {{
       position: absolute;
       top: 16px;
-      left: 16px;
+      right: 16px;
       z-index: 95;
       background: var(--dock-bg);
       border: 1px solid var(--dock-border);
@@ -2101,7 +2188,44 @@ window.addEventListener("DOMContentLoaded", function() {{
 </head>
 <body>
   <div id="app-layout">
-    <!-- Collapsible Modern Sidebar -->
+    <!-- Main Plot Canvas on the Left -->
+    <main id="plot-container">
+      <!-- Floating Expand Button when Sidebar is Collapsed -->
+      <button id="sidebar-expand-btn" class="sidebar-expand-btn" title="Expandir Painel Lateral">
+        <span>Painel</span> <span>◀</span>
+      </button>
+
+      {plotly_snippet}
+
+      <!-- Modern Floating Bottom Dock Centered in Canvas -->
+      <div id="control-dock" class="control-dock">
+        <div class="dock-buttons">
+          <button id="btn-dock-first" class="dock-btn" title="Início (s₀)">⏮</button>
+          <button id="btn-dock-prev" class="dock-btn" title="Passo Anterior">◀</button>
+          <button id="btn-dock-play" class="dock-btn btn-play" title="Reproduzir / Pausar">
+            <span id="play-icon">▶</span>
+          </button>
+          <button id="btn-dock-next" class="dock-btn" title="Próximo Passo">▶</button>
+          <button id="btn-dock-last" class="dock-btn" title="Fim (s₁)">⏭</button>
+        </div>
+
+        <div class="dock-slider-wrap">
+          <input type="range" id="dock-slider" min="0" max="{num_frames - 1}" value="0" step="1" class="dock-slider" aria-label="Comprimento de arco s">
+          <div class="dock-track-fill" id="dock-track-fill"></div>
+        </div>
+
+        <div class="dock-readout">
+          <span>s =</span>
+          <span class="dock-s-val" id="dock-s-val">{init_s:.3f}</span>
+          <span class="dock-s-max">/ {s1:.3f}</span>
+          <span class="dock-pct" id="dock-pct">0%</span>
+        </div>
+
+        <button id="btn-dock-speed" class="dock-btn-speed" title="Velocidade da Reprodução">1x</button>
+      </div>
+    </main>
+
+    <!-- Collapsible Modern Sidebar on the Right -->
     <aside id="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-title-row">
@@ -2114,7 +2238,7 @@ window.addEventListener("DOMContentLoaded", function() {{
               <span id="theme-icon">🌙</span>
             </button>
             <button id="sidebar-toggle-btn" class="icon-btn" title="Recolher Painel" aria-label="Recolher Painel">
-              <span>◀</span>
+              <span>▶</span>
             </button>
           </div>
         </div>
@@ -2132,15 +2256,15 @@ window.addEventListener("DOMContentLoaded", function() {{
           <div class="math-box">
             <div class="math-row">
               <span class="math-label">Curvatura:</span>
-              <span class="math-expr" id="math-kappa">$$\kappa(s) = {kappa_tex}$$</span>
+              <span class="math-expr" id="math-kappa">$$\\kappa(s) = {kappa_tex}$$</span>
             </div>
             <div class="math-row">
               <span class="math-label">Torção:</span>
-              <span class="math-expr" id="math-tau">$$\tau(s) = {tau_tex}$$</span>
+              <span class="math-expr" id="math-tau">$$\\tau(s) = {tau_tex}$$</span>
             </div>
             <div class="math-row">
               <span class="math-label">Intervalo:</span>
-              <span class="math-expr">$$s \in [{s0:.2f}, {s1:.2f}]$$</span>
+              <span class="math-expr">$$s \\in [{s0:.2f}, {s1:.2f}]$$</span>
             </div>
           </div>
         </div>
@@ -2177,43 +2301,6 @@ window.addEventListener("DOMContentLoaded", function() {{
         </div>
       </div>
     </aside>
-
-    <!-- Floating Expand Button when Sidebar is Collapsed -->
-    <button id="sidebar-expand-btn" class="sidebar-expand-btn" title="Expandir Painel Lateral">
-      <span>▶</span> <span>Painel</span>
-    </button>
-
-    <!-- Canvas Container -->
-    <main id="plot-container">
-      {plotly_snippet}
-    </main>
-
-    <!-- Modern Floating Bottom Dock -->
-    <div id="control-dock" class="control-dock">
-      <div class="dock-buttons">
-        <button id="btn-dock-first" class="dock-btn" title="Início (s₀)">⏮</button>
-        <button id="btn-dock-prev" class="dock-btn" title="Passo Anterior">◀</button>
-        <button id="btn-dock-play" class="dock-btn btn-play" title="Reproduzir / Pausar">
-          <span id="play-icon">▶</span>
-        </button>
-        <button id="btn-dock-next" class="dock-btn" title="Próximo Passo">▶</button>
-        <button id="btn-dock-last" class="dock-btn" title="Fim (s₁)">⏭</button>
-      </div>
-
-      <div class="dock-slider-wrap">
-        <input type="range" id="dock-slider" min="0" max="{num_frames - 1}" value="0" step="1" class="dock-slider" aria-label="Comprimento de arco s">
-        <div class="dock-track-fill" id="dock-track-fill"></div>
-      </div>
-
-      <div class="dock-readout">
-        <span>s =</span>
-        <span class="dock-s-val" id="dock-s-val">{init_s:.3f}</span>
-        <span class="dock-s-max">/ {s1:.3f}</span>
-        <span class="dock-pct" id="dock-pct">0%</span>
-      </div>
-
-      <button id="btn-dock-speed" class="dock-btn-speed" title="Velocidade da Reprodução">1x</button>
-    </div>
   </div>
 </body>
 </html>

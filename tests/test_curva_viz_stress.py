@@ -495,3 +495,39 @@ class TestModernUIComponents:
         assert 'id="hud-vec-t"' in planar_html
         assert 'id="hud-vec-n"' in planar_html
         assert 'id="hud-vec-b"' in space_html
+
+    def test_fixed_axis_ranges_and_zoom_stability(self):
+        """Verify 2D and 3D figures set fixed ranges, autorange=False, and uirevision to avoid frame jumping."""
+        res_2d = ce.reconstruct_curve("1", "0", s0=0.0, s1=6.28, num_points=50)
+        fig_2d = cv.build_curve_figure(res_2d)
+        assert fig_2d.layout.uirevision == "constant"
+        assert fig_2d.layout.xaxis.autorange is False
+        assert fig_2d.layout.yaxis.autorange is False
+        assert len(fig_2d.layout.xaxis.range) == 2
+        assert len(fig_2d.layout.yaxis.range) == 2
+        assert fig_2d.layout.xaxis.range[0] < fig_2d.layout.xaxis.range[1]
+
+        res_3d = ce.reconstruct_curve("1", "1", s0=0.0, s1=6.28, num_points=50)
+        fig_3d = cv.build_curve_figure(res_3d)
+        assert fig_3d.layout.uirevision == "constant"
+        assert fig_3d.layout.scene.uirevision == "constant"
+        assert fig_3d.layout.scene.aspectmode == "cube"
+        assert fig_3d.layout.scene.xaxis.autorange is False
+        assert fig_3d.layout.scene.yaxis.autorange is False
+        assert fig_3d.layout.scene.zaxis.autorange is False
+        assert len(fig_3d.layout.scene.xaxis.range) == 2
+        assert len(fig_3d.layout.scene.yaxis.range) == 2
+        assert len(fig_3d.layout.scene.zaxis.range) == 2
+
+    def test_sidebar_right_push_layout(self, planar_html):
+        """Verify sidebar is positioned on the right and pushes plot container on the left."""
+        plot_idx = planar_html.find('id="plot-container"')
+        sidebar_idx = planar_html.find('id="sidebar"')
+        dock_idx = planar_html.find('id="control-dock"')
+        # Plot container comes before sidebar in DOM (flex row: plot on left, sidebar on right)
+        assert plot_idx < sidebar_idx
+        # Control dock is inside plot-container before sidebar
+        assert plot_idx < dock_idx < sidebar_idx
+        # CSS checks
+        assert "margin-right: -360px" in planar_html
+        assert "border-left: 1px solid var(--border-ui)" in planar_html
