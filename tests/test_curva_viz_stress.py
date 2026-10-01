@@ -435,3 +435,63 @@ class TestDualInputAndRobustness:
         p_osc = tmp_path / "osc.html"
         cv.export_interactive_html(res_osc, str(p_osc))
         assert p_osc.exists()
+
+
+class TestModernUIComponents:
+    """Verifies the modern redesign: collapsible sidebar, KaTeX, light/dark themes, custom switches, and floating dock."""
+
+    @pytest.fixture
+    def planar_html(self, tmp_path) -> str:
+        res = ce.reconstruct_curve("1", "0", s0=0.0, s1=6.28, num_points=100)
+        p = tmp_path / "planar_ui.html"
+        cv.export_interactive_html(res, str(p))
+        return p.read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def space_html(self, tmp_path) -> str:
+        res = ce.reconstruct_curve("1", "1", s0=0.0, s1=6.28, num_points=100)
+        p = tmp_path / "space_ui.html"
+        cv.export_interactive_html(res, str(p))
+        return p.read_text(encoding="utf-8")
+
+    def test_sidebar_and_layout_structure(self, planar_html):
+        assert 'id="app-layout"' in planar_html
+        assert 'id="sidebar"' in planar_html
+        assert 'id="sidebar-toggle-btn"' in planar_html
+        assert 'id="sidebar-expand-btn"' in planar_html
+        assert "toggleSidebar()" in planar_html
+
+    def test_katex_integration_and_formulas(self, planar_html):
+        assert "katex.min.css" in planar_html
+        assert "katex.min.js" in planar_html
+        assert "renderMathInElement" in planar_html
+        assert 'id="math-kappa"' in planar_html
+        assert 'id="math-tau"' in planar_html
+
+    def test_theme_system_elements(self, planar_html):
+        assert 'data-theme="light"' in planar_html
+        assert 'id="theme-toggle-btn"' in planar_html
+        assert 'id="theme-icon"' in planar_html
+        assert "toggleTheme()" in planar_html
+
+    def test_floating_dock_elements(self, planar_html):
+        assert 'id="control-dock"' in planar_html
+        assert 'id="dock-slider"' in planar_html
+        assert 'id="dock-track-fill"' in planar_html
+        assert 'id="btn-dock-play"' in planar_html
+        assert 'id="btn-dock-prev"' in planar_html
+        assert 'id="btn-dock-next"' in planar_html
+        assert 'id="btn-dock-speed"' in planar_html
+        assert 'id="dock-s-val"' in planar_html
+        assert 'id="dock-pct"' in planar_html
+
+    def test_custom_apparatus_switches(self, planar_html, space_html):
+        assert "toggleTraceVisibility(" in planar_html
+        assert "toggleTraceVisibility(" in space_html
+        assert "Reta Normal L_N" in planar_html
+        assert "Vetor Binormal B" in space_html
+
+    def test_vector_displays_in_hud(self, planar_html, space_html):
+        assert 'id="hud-vec-t"' in planar_html
+        assert 'id="hud-vec-n"' in planar_html
+        assert 'id="hud-vec-b"' in space_html

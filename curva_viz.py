@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import plotly.graph_objects as go
+import sympy as sp
 
 if TYPE_CHECKING:
     from curva_engine import CurveResult
@@ -54,6 +55,21 @@ if TYPE_CHECKING:
 _QUAD_I = [0, 0]
 _QUAD_J = [1, 2]
 _QUAD_K = [2, 3]
+
+# ---------------------------------------------------------------------------
+# Refined scientific color palette (Accessible, elegant, high-contrast)
+# ---------------------------------------------------------------------------
+COLOR_CURVE = "#2563eb"        # Sapphire Blue
+COLOR_POINT = "#f59e0b"        # Amber
+COLOR_TANGENT = "#10b981"      # Emerald Green
+COLOR_NORMAL = "#ef4444"       # Ruby / Coral Red
+COLOR_BINORMAL = "#6366f1"     # Violet / Indigo
+COLOR_CIRCLE = "#f59e0b"       # Amber
+COLOR_LT_LINE = "rgba(16, 185, 129, 0.45)"
+COLOR_LN_LINE = "rgba(239, 68, 68, 0.35)"
+COLOR_PLANE_OSC = "rgba(37, 99, 235, 0.22)"
+COLOR_PLANE_NORM = "rgba(239, 68, 68, 0.18)"
+COLOR_PLANE_RECT = "rgba(99, 102, 241, 0.18)"
 
 # ---------------------------------------------------------------------------
 # Geometric classification display names
@@ -68,6 +84,15 @@ _CLASS_DISPLAY_NAMES = {
     "curva_plana": "Curva Plana",
     "curva_espacial": "Curva Espacial",
 }
+
+
+def _format_katex(expr_str: str) -> str:
+    """Format an expression string into clean LaTeX for KaTeX rendering."""
+    try:
+        expr = sp.sympify(expr_str)
+        return sp.latex(expr)
+    except Exception:
+        return expr_str
 
 
 def _compute_quad_coords(
@@ -198,7 +223,7 @@ def _build_apparatus_traces(
         z=[float(P[2])],
         mode="markers",
         name="Ponto Ativo r(s)",
-        marker=dict(size=8, color="#ffea00", symbol="circle"),
+        marker=dict(size=8, color=COLOR_POINT, symbol="circle"),
         hovertemplate="<b>Ponto Ativo r(s)</b><br>x: %{x:.3f}<br>y: %{y:.3f}<br>z: %{z:.3f}<extra></extra>",
     )
     # Trace 2: Vetor Tangente T
@@ -208,8 +233,8 @@ def _build_apparatus_traces(
         z=[float(P[2]), float(P[2] + L_vec * T[2])],
         mode="lines+markers",
         name="Vetor Tangente T",
-        line=dict(color="#00e676", width=7),
-        marker=dict(size=[0, 8], color="#00e676"),
+        line=dict(color=COLOR_TANGENT, width=6),
+        marker=dict(size=[0, 8], color=COLOR_TANGENT),
         hovertemplate="<b>Vetor Tangente T</b><extra></extra>",
     )
     # Trace 3: Vetor Normal N
@@ -219,8 +244,8 @@ def _build_apparatus_traces(
         z=[float(P[2]), float(P[2] + L_vec * N[2])],
         mode="lines+markers",
         name="Vetor Normal N",
-        line=dict(color="#ff1744", width=7),
-        marker=dict(size=[0, 8], color="#ff1744"),
+        line=dict(color=COLOR_NORMAL, width=6),
+        marker=dict(size=[0, 8], color=COLOR_NORMAL),
         hovertemplate="<b>Vetor Normal N</b><extra></extra>",
     )
     # Trace 4: Vetor Binormal B
@@ -230,8 +255,8 @@ def _build_apparatus_traces(
         z=[float(P[2]), float(P[2] + L_vec * B[2])],
         mode="lines+markers",
         name="Vetor Binormal B",
-        line=dict(color="#2979ff", width=7),
-        marker=dict(size=[0, 8], color="#2979ff"),
+        line=dict(color=COLOR_BINORMAL, width=6),
+        marker=dict(size=[0, 8], color=COLOR_BINORMAL),
         visible="legendonly" if is_planar else True,
         hovertemplate="<b>Vetor Binormal B</b><extra></extra>",
     )
@@ -242,7 +267,7 @@ def _build_apparatus_traces(
         z=lt_z,
         mode="lines",
         name="Reta Tangente L_T",
-        line=dict(color="rgba(0, 230, 118, 0.65)", width=3, dash="dash"),
+        line=dict(color=COLOR_LT_LINE, width=2.5, dash="dash"),
         hovertemplate="<b>Reta Tangente L_T</b><extra></extra>",
     )
     # Trace 6: Plano Osculador (T, N)
@@ -253,8 +278,8 @@ def _build_apparatus_traces(
         i=_QUAD_I,
         j=_QUAD_J,
         k=_QUAD_K,
-        color="rgba(255, 213, 79, 0.28)",
-        opacity=0.28,
+        color=COLOR_PLANE_OSC,
+        opacity=0.22,
         flatshading=True,
         name="Plano Osculador (T, N)",
         showlegend=True,
@@ -268,8 +293,8 @@ def _build_apparatus_traces(
         i=_QUAD_I,
         j=_QUAD_J,
         k=_QUAD_K,
-        color="rgba(255, 82, 82, 0.20)",
-        opacity=0.20,
+        color=COLOR_PLANE_NORM,
+        opacity=0.18,
         flatshading=True,
         name="Plano Normal (N, B)",
         visible="legendonly" if is_planar else True,
@@ -284,8 +309,8 @@ def _build_apparatus_traces(
         i=_QUAD_I,
         j=_QUAD_J,
         k=_QUAD_K,
-        color="rgba(68, 138, 255, 0.20)",
-        opacity=0.20,
+        color=COLOR_PLANE_RECT,
+        opacity=0.18,
         flatshading=True,
         name="Plano Retificante (T, B)",
         visible="legendonly" if is_planar else True,
@@ -299,7 +324,7 @@ def _build_apparatus_traces(
         z=cz,
         mode="lines",
         name="Círculo Osculador",
-        line=dict(color="#ffd600", width=4),
+        line=dict(color=COLOR_CIRCLE, width=3.5),
         hovertemplate="<b>Círculo Osculador</b><extra></extra>",
     )
 
@@ -380,7 +405,7 @@ def _build_apparatus_traces_2d(
         y=[float(P[1])],
         mode="markers",
         name="Ponto Ativo r(s)",
-        marker=dict(size=10, color="#ffea00", symbol="circle"),
+        marker=dict(size=10, color=COLOR_POINT, symbol="circle"),
         hovertemplate="<b>Ponto Ativo r(s)</b><br>x: %{x:.3f}<br>y: %{y:.3f}<extra></extra>",
     )
     # Trace 2: Vetor Tangente T
@@ -389,8 +414,8 @@ def _build_apparatus_traces_2d(
         y=[float(P[1]), float(P[1] + L_vec * T[1])],
         mode="lines+markers",
         name="Vetor Tangente T",
-        line=dict(color="#00e676", width=5),
-        marker=dict(size=[0, 8], color="#00e676"),
+        line=dict(color=COLOR_TANGENT, width=5),
+        marker=dict(size=[0, 8], color=COLOR_TANGENT),
         hovertemplate="<b>Vetor Tangente T</b><extra></extra>",
     )
     # Trace 3: Vetor Normal N
@@ -399,8 +424,8 @@ def _build_apparatus_traces_2d(
         y=[float(P[1]), float(P[1] + L_vec * N[1])],
         mode="lines+markers",
         name="Vetor Normal N",
-        line=dict(color="#ff1744", width=5),
-        marker=dict(size=[0, 8], color="#ff1744"),
+        line=dict(color=COLOR_NORMAL, width=5),
+        marker=dict(size=[0, 8], color=COLOR_NORMAL),
         hovertemplate="<b>Vetor Normal N</b><extra></extra>",
     )
     # Trace 4: Reta Tangente L_T
@@ -409,7 +434,7 @@ def _build_apparatus_traces_2d(
         y=lt_y,
         mode="lines",
         name="Reta Tangente L_T",
-        line=dict(color="rgba(0, 230, 118, 0.65)", width=2, dash="dash"),
+        line=dict(color=COLOR_LT_LINE, width=2, dash="dash"),
         hovertemplate="<b>Reta Tangente L_T</b><extra></extra>",
     )
     # Trace 5: Reta Normal L_N
@@ -418,7 +443,7 @@ def _build_apparatus_traces_2d(
         y=ln_y,
         mode="lines",
         name="Reta Normal L_N",
-        line=dict(color="rgba(255, 23, 68, 0.45)", width=2, dash="dot"),
+        line=dict(color=COLOR_LN_LINE, width=2, dash="dot"),
         hovertemplate="<b>Reta Normal L_N</b><extra></extra>",
     )
     # Trace 6: Círculo Osculador
@@ -427,7 +452,7 @@ def _build_apparatus_traces_2d(
         y=cy,
         mode="lines",
         name="Círculo Osculador",
-        line=dict(color="#ffd600", width=3),
+        line=dict(color=COLOR_CIRCLE, width=3),
         hovertemplate="<b>Círculo Osculador</b><extra></extra>",
     )
 
@@ -479,8 +504,8 @@ def _build_planar_2d_figure(
         y=r[1, :].tolist(),
         mode="lines+markers",
         name="Curva r(s)",
-        line=dict(color="#00e5ff", width=4),
-        marker=dict(size=3, color="#00e5ff"),
+        line=dict(color=COLOR_CURVE, width=3.5),
+        marker=dict(size=3, color=COLOR_CURVE),
         customdata=customdata,
         hovertemplate=(
             "<b>Curva r(s)</b><br>"
@@ -524,6 +549,15 @@ def _build_planar_2d_figure(
                 "tau": 0.0,
                 "rho": rho_val,
                 "is_planar": True,
+                "Tx": float(T_mat[0, pt_idx]),
+                "Ty": float(T_mat[1, pt_idx]),
+                "Tz": 0.0,
+                "Nx": float(N_mat[0, pt_idx]),
+                "Ny": float(N_mat[1, pt_idx]),
+                "Nz": 0.0,
+                "Bx": 0.0,
+                "By": 0.0,
+                "Bz": 1.0,
             }
         )
 
@@ -570,7 +604,7 @@ def _build_planar_2d_figure(
                 "prefix": "s = ",
                 "visible": True,
                 "xanchor": "center",
-                "font": {"size": 13, "color": "#38bdf8"},
+                "font": {"size": 13, "color": "#2563eb"},
             },
             steps=slider_steps,
             pad={"b": 10, "t": 20},
@@ -578,10 +612,10 @@ def _build_planar_2d_figure(
             x=0.06,
             y=0.03,
             tickcolor="#64748b",
-            font={"color": "#94a3b8", "size": 10},
-            bgcolor="rgba(15, 23, 42, 0.6)",
-            activebgcolor="#0284c7",
-            bordercolor="rgba(255, 255, 255, 0.1)",
+            font={"color": "#64748b", "size": 10},
+            bgcolor="rgba(241, 245, 249, 0.6)",
+            activebgcolor="#2563eb",
+            bordercolor="rgba(0, 0, 0, 0.1)",
             borderwidth=1,
         )
     ]
@@ -595,9 +629,9 @@ def _build_planar_2d_figure(
         xanchor="left",
         yanchor="top",
         pad={"r": 10, "t": 10},
-        bgcolor="rgba(15, 23, 42, 0.7)",
-        bordercolor="rgba(255, 255, 255, 0.15)",
-        font={"color": "#f1f5f9", "size": 12},
+        bgcolor="rgba(241, 245, 249, 0.7)",
+        bordercolor="rgba(0, 0, 0, 0.15)",
+        font={"color": "#0f172a", "size": 12},
         buttons=[
             dict(
                 label="▶ Play",
@@ -637,7 +671,7 @@ def _build_planar_2d_figure(
     fig.update_layout(
         title=dict(
             text=final_title,
-            font=dict(color="#f8fafc", size=15),
+            font=dict(color="#0f172a", size=14),
             x=0.5,
             y=0.98,
             xanchor="center",
@@ -645,35 +679,26 @@ def _build_planar_2d_figure(
         uirevision="constant",
         xaxis=dict(
             title="X",
-            color="#94a3b8",
-            gridcolor="rgba(255, 255, 255, 0.1)",
-            zerolinecolor="rgba(255, 255, 255, 0.2)",
+            color="#64748b",
+            gridcolor="rgba(0, 0, 0, 0.06)",
+            zerolinecolor="rgba(0, 0, 0, 0.15)",
             showgrid=True,
             zeroline=True,
         ),
         yaxis=dict(
             title="Y",
-            color="#94a3b8",
-            gridcolor="rgba(255, 255, 255, 0.1)",
-            zerolinecolor="rgba(255, 255, 255, 0.2)",
+            color="#64748b",
+            gridcolor="rgba(0, 0, 0, 0.06)",
+            zerolinecolor="rgba(0, 0, 0, 0.15)",
             showgrid=True,
             zeroline=True,
             scaleanchor="x",
             scaleratio=1,
         ),
-        paper_bgcolor="#0b0f19",
-        plot_bgcolor="#0b0f19",
-        margin=dict(l=50, r=50, t=50, b=50),
-        legend=dict(
-            x=0.98,
-            y=0.95,
-            xanchor="right",
-            yanchor="top",
-            bgcolor="rgba(15, 23, 42, 0.8)",
-            bordercolor="rgba(255, 255, 255, 0.1)",
-            borderwidth=1,
-            font=dict(color="#f1f5f9", size=11),
-        ),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        margin=dict(l=45, r=25, t=35, b=45),
+        showlegend=False,
         sliders=sliders,
         updatemenus=[play_pause_menu],
     )
@@ -775,8 +800,8 @@ def _build_spatial_3d_figure(
         z=r[2, :].tolist(),
         mode="lines+markers",
         name="Curva r(s)",
-        line=dict(color="#00e5ff", width=5),
-        marker=dict(size=3, color="#00e5ff"),
+        line=dict(color=COLOR_CURVE, width=4),
+        marker=dict(size=3, color=COLOR_CURVE),
         customdata=customdata,
         hovertemplate=(
             "<b>Curva r(s)</b><br>"
@@ -829,6 +854,16 @@ def _build_spatial_3d_figure(
                 "kappa": k_val,
                 "tau": t_val,
                 "rho": rho_val,
+                "is_planar": is_planar,
+                "Tx": float(T_mat[0, pt_idx]),
+                "Ty": float(T_mat[1, pt_idx]),
+                "Tz": float(T_mat[2, pt_idx]),
+                "Nx": float(N_mat[0, pt_idx]),
+                "Ny": float(N_mat[1, pt_idx]),
+                "Nz": float(N_mat[2, pt_idx]),
+                "Bx": float(B_mat[0, pt_idx]),
+                "By": float(B_mat[1, pt_idx]),
+                "Bz": float(B_mat[2, pt_idx]),
             }
         )
 
@@ -880,7 +915,7 @@ def _build_spatial_3d_figure(
                 "prefix": "s = ",
                 "visible": True,
                 "xanchor": "center",
-                "font": {"size": 13, "color": "#38bdf8"},
+                "font": {"size": 13, "color": "#2563eb"},
             },
             steps=slider_steps,
             pad={"b": 10, "t": 20},
@@ -888,10 +923,10 @@ def _build_spatial_3d_figure(
             x=0.06,
             y=0.03,
             tickcolor="#64748b",
-            font={"color": "#94a3b8", "size": 10},
-            bgcolor="rgba(15, 23, 42, 0.6)",
-            activebgcolor="#0284c7",
-            bordercolor="rgba(255, 255, 255, 0.1)",
+            font={"color": "#64748b", "size": 10},
+            bgcolor="rgba(241, 245, 249, 0.6)",
+            activebgcolor="#2563eb",
+            bordercolor="rgba(0, 0, 0, 0.1)",
             borderwidth=1,
         )
     ]
@@ -906,9 +941,9 @@ def _build_spatial_3d_figure(
         xanchor="left",
         yanchor="top",
         pad={"r": 10, "t": 10},
-        bgcolor="rgba(15, 23, 42, 0.7)",
-        bordercolor="rgba(255, 255, 255, 0.15)",
-        font={"color": "#f1f5f9", "size": 12},
+        bgcolor="rgba(241, 245, 249, 0.7)",
+        bordercolor="rgba(0, 0, 0, 0.15)",
+        font={"color": "#0f172a", "size": 12},
         buttons=[
             dict(
                 label="▶ Play",
@@ -946,9 +981,9 @@ def _build_spatial_3d_figure(
         y=0.98,
         xanchor="right",
         yanchor="top",
-        bgcolor="rgba(15, 23, 42, 0.7)",
-        bordercolor="rgba(255, 255, 255, 0.15)",
-        font={"color": "#f1f5f9", "size": 11},
+        bgcolor="rgba(241, 245, 249, 0.7)",
+        bordercolor="rgba(0, 0, 0, 0.15)",
+        font={"color": "#0f172a", "size": 11},
         buttons=[
             dict(
                 label="Vista 3D",
@@ -1005,7 +1040,7 @@ def _build_spatial_3d_figure(
     fig.update_layout(
         title=dict(
             text=final_title,
-            font=dict(color="#f8fafc", size=15),
+            font=dict(color="#0f172a", size=14),
             x=0.5,
             y=0.98,
             xanchor="center",
@@ -1017,42 +1052,33 @@ def _build_spatial_3d_figure(
             camera=init_camera,
             xaxis=dict(
                 title="X",
-                color="#94a3b8",
-                gridcolor="rgba(255, 255, 255, 0.1)",
-                zerolinecolor="rgba(255, 255, 255, 0.2)",
-                backgroundcolor="rgba(11, 15, 25, 0.8)",
+                color="#64748b",
+                gridcolor="rgba(0, 0, 0, 0.08)",
+                zerolinecolor="rgba(0, 0, 0, 0.2)",
+                backgroundcolor="rgba(248, 250, 252, 0.5)",
                 showbackground=True,
             ),
             yaxis=dict(
                 title="Y",
-                color="#94a3b8",
-                gridcolor="rgba(255, 255, 255, 0.1)",
-                zerolinecolor="rgba(255, 255, 255, 0.2)",
-                backgroundcolor="rgba(11, 15, 25, 0.8)",
+                color="#64748b",
+                gridcolor="rgba(0, 0, 0, 0.08)",
+                zerolinecolor="rgba(0, 0, 0, 0.2)",
+                backgroundcolor="rgba(248, 250, 252, 0.5)",
                 showbackground=True,
             ),
             zaxis=dict(
                 title="Z",
-                color="#94a3b8",
-                gridcolor="rgba(255, 255, 255, 0.1)",
-                zerolinecolor="rgba(255, 255, 255, 0.2)",
-                backgroundcolor="rgba(11, 15, 25, 0.8)",
+                color="#64748b",
+                gridcolor="rgba(0, 0, 0, 0.08)",
+                zerolinecolor="rgba(0, 0, 0, 0.2)",
+                backgroundcolor="rgba(248, 250, 252, 0.5)",
                 showbackground=True,
             ),
         ),
-        paper_bgcolor="#0b0f19",
-        plot_bgcolor="#0b0f19",
-        margin=dict(l=0, r=0, t=35, b=0),
-        legend=dict(
-            x=0.98,
-            y=0.85,
-            xanchor="right",
-            yanchor="top",
-            bgcolor="rgba(15, 23, 42, 0.8)",
-            bordercolor="rgba(255, 255, 255, 0.1)",
-            borderwidth=1,
-            font=dict(color="#f1f5f9", size=11),
-        ),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        margin=dict(l=0, r=0, t=20, b=0),
+        showlegend=False,
         sliders=sliders,
         updatemenus=updatemenus,
     )
@@ -1178,13 +1204,100 @@ def export_interactive_html(
 
     # Prepare HUD metrics JSON
     metrics_json = json.dumps(hud_metrics or [])
+    num_frames = len(hud_metrics) if hud_metrics else 1
+
+    s_arr = getattr(curve_res, "s", [0.0, 6.28]) if curve_res else [0.0, 6.28]
+    s0 = float(s_arr[0])
+    s1 = float(s_arr[-1])
+    kappa_expr = getattr(curve_res, "kappa_expr", "1") if curve_res else "1"
+    tau_expr = getattr(curve_res, "tau_expr", "0") if curve_res else "0"
+    kappa_tex = _format_katex(str(kappa_expr))
+    tau_tex = _format_katex(str(tau_expr)) if not is_planar else "0"
+
+    init_tx, init_ty, init_tz = 1.0, 0.0, 0.0
+    init_nx, init_ny, init_nz = 0.0, 1.0, 0.0
+    init_bx, init_by, init_bz = 0.0, 0.0, 1.0
+    if curve_res is not None and getattr(curve_res, "T", None) is not None:
+        init_tx = float(curve_res.T[0, 0])
+        init_ty = float(curve_res.T[1, 0])
+        init_tz = float(curve_res.T[2, 0]) if not is_planar else 0.0
+        init_nx = float(curve_res.N[0, 0])
+        init_ny = float(curve_res.N[1, 0])
+        init_nz = float(curve_res.N[2, 0]) if not is_planar else 0.0
+        if not is_planar and getattr(curve_res, "B", None) is not None:
+            init_bx = float(curve_res.B[0, 0])
+            init_by = float(curve_res.B[1, 0])
+            init_bz = float(curve_res.B[2, 0])
+
+    if is_planar:
+        vec_html = f"""
+        <div class="vec-item"><span class="vec-tag vec-t">T</span><span class="vec-val" id="hud-vec-t">[{init_tx:.3f}, {init_ty:.3f}]</span></div>
+        <div class="vec-item"><span class="vec-tag vec-n">N</span><span class="vec-val" id="hud-vec-n">[{init_nx:.3f}, {init_ny:.3f}]</span></div>
+        """
+        switches = [
+            ("Curva r(s)", COLOR_CURVE, 0, True),
+            ("Ponto Ativo r(s)", COLOR_POINT, 1, True),
+            ("Vetor Tangente T", COLOR_TANGENT, 2, True),
+            ("Vetor Normal N", COLOR_NORMAL, 3, True),
+            ("Reta Tangente L_T", "rgba(16, 185, 129, 0.7)", 4, True),
+            ("Reta Normal L_N", "rgba(239, 68, 68, 0.7)", 5, True),
+            ("Círculo Osculador", COLOR_CIRCLE, 6, True),
+        ]
+        theory_summary = (
+            "Pelo <b>Teorema Fundamental das Curvas Planas</b>, a curvatura com sinal "
+            "\\(\\kappa(s)\\) determina a curva de modo único a menos de rotações e translações "
+            "no plano \\(\\mathbb{R}^2\\). A reconstrução é calculada diretamente pelo ângulo "
+            "tangente \\(\\theta(s) = \\int_{s_0}^s \\kappa(u)\\,du\\) via quadratura direta."
+        )
+    else:
+        vec_html = f"""
+        <div class="vec-item"><span class="vec-tag vec-t">T</span><span class="vec-val" id="hud-vec-t">[{init_tx:.3f}, {init_ty:.3f}, {init_tz:.3f}]</span></div>
+        <div class="vec-item"><span class="vec-tag vec-n">N</span><span class="vec-val" id="hud-vec-n">[{init_nx:.3f}, {init_ny:.3f}, {init_nz:.3f}]</span></div>
+        <div class="vec-item"><span class="vec-tag vec-b">B</span><span class="vec-val" id="hud-vec-b">[{init_bx:.3f}, {init_by:.3f}, {init_bz:.3f}]</span></div>
+        """
+        switches = [
+            ("Curva r(s)", COLOR_CURVE, 0, True),
+            ("Ponto Ativo r(s)", COLOR_POINT, 1, True),
+            ("Vetor Tangente T", COLOR_TANGENT, 2, True),
+            ("Vetor Normal N", COLOR_NORMAL, 3, True),
+            ("Vetor Binormal B", COLOR_BINORMAL, 4, True),
+            ("Reta Tangente L_T", "rgba(16, 185, 129, 0.7)", 5, True),
+            ("Plano Osculador (T, N)", "rgba(37, 99, 235, 0.7)", 6, True),
+            ("Plano Normal (N, B)", "rgba(239, 68, 68, 0.7)", 7, True),
+            ("Plano Retificante (T, B)", "rgba(99, 102, 241, 0.7)", 8, True),
+            ("Círculo Osculador", COLOR_CIRCLE, 9, True),
+        ]
+        theory_summary = (
+            "Pelo <b>Teorema Fundamental das Curvas no \\(\\mathbb{R}^3\\)</b>, funções de curvatura "
+            "\\(\\kappa(s) > 0\\) e torção \\(\\tau(s)\\) determinam a curva de modo único a menos "
+            "de movimentos rígidos euclidianos (\\(\\mathrm{SE}(3)\\)). A solução é integrada a partir "
+            "do sistema diferencial linear de Frenet-Serret em \\(\\mathrm{SO}(3)\\)."
+        )
+
+    switches_html = []
+    for name, col, idx, chk in switches:
+        checked_attr = "checked" if chk else ""
+        switches_html.append(
+            f'<label class="switch-row">'
+            f'<div class="switch-left"><span class="color-badge" style="background-color: {col};"></span><span class="switch-name">{name}</span></div>'
+            f'<div class="toggle-wrap"><input type="checkbox" {checked_attr} onchange="toggleTraceVisibility({idx}, this.checked)"><span class="toggle-slider"></span></div>'
+            f'</label>'
+        )
+    switches_markup = "\n".join(switches_html)
 
     # Post-script JavaScript to inject inside Plotly.newPlot.then(...)
     post_script_js = f"""
 window.CURVE_METRICS = {metrics_json};
+var isPlanar = {"true" if is_planar else "false"};
+var totalFrames = {num_frames};
+var curFrame = 0;
+var isPlaying = false;
+var playTimer = null;
+var animSpeed = 1.0;
 
 function updateHUDMetrics(idx) {{
   if (!window.CURVE_METRICS || !window.CURVE_METRICS[idx]) return;
+  curFrame = idx;
   var m = window.CURVE_METRICS[idx];
   var sElem = document.getElementById("hud-s");
   var rElem = document.getElementById("hud-r");
@@ -1204,6 +1317,150 @@ function updateHUDMetrics(idx) {{
     tElem.innerText = m.is_planar ? "0.000 (Plana)" : m.tau.toFixed(3);
   }}
   if (rhoElem) rhoElem.innerText = m.rho === null ? "∞" : m.rho.toFixed(3);
+
+  // Update vectors
+  var vt = document.getElementById("hud-vec-t");
+  var vn = document.getElementById("hud-vec-n");
+  var vb = document.getElementById("hud-vec-b");
+  if (vt && m.Tx !== undefined) {{
+    vt.innerText = m.is_planar
+      ? "[" + m.Tx.toFixed(3) + ", " + m.Ty.toFixed(3) + "]"
+      : "[" + m.Tx.toFixed(3) + ", " + m.Ty.toFixed(3) + ", " + m.Tz.toFixed(3) + "]";
+  }}
+  if (vn && m.Nx !== undefined) {{
+    vn.innerText = m.is_planar
+      ? "[" + m.Nx.toFixed(3) + ", " + m.Ny.toFixed(3) + "]"
+      : "[" + m.Nx.toFixed(3) + ", " + m.Ny.toFixed(3) + ", " + m.Nz.toFixed(3) + "]";
+  }}
+  if (vb && m.Bx !== undefined && !m.is_planar) {{
+    vb.innerText = "[" + m.Bx.toFixed(3) + ", " + m.By.toFixed(3) + ", " + m.Bz.toFixed(3) + "]";
+  }}
+
+  // Update dock slider and readout
+  var slider = document.getElementById("dock-slider");
+  var sVal = document.getElementById("dock-s-val");
+  var sPct = document.getElementById("dock-pct");
+  var trackFill = document.getElementById("dock-track-fill");
+  if (slider) slider.value = idx;
+  if (sVal) sVal.innerText = m.s.toFixed(3);
+  var pct = totalFrames > 1 ? Math.round((idx / (totalFrames - 1)) * 100) : 0;
+  if (sPct) sPct.innerText = pct + "%";
+  if (trackFill) trackFill.style.width = pct + "%";
+}}
+
+function goToFrame(frameIdx) {{
+  var gd = document.getElementById("fundamental_curve_plot");
+  if (!gd) return;
+  frameIdx = Math.max(0, Math.min(totalFrames - 1, frameIdx));
+  curFrame = frameIdx;
+  Plotly.animate(gd, ["frame_" + frameIdx], {{
+    mode: "immediate",
+    frame: {{ duration: 0, redraw: true }},
+    transition: {{ duration: 0 }}
+  }});
+  Plotly.relayout(gd, {{
+    "sliders[0].active": frameIdx
+  }});
+  updateHUDMetrics(frameIdx);
+}}
+
+function togglePlay() {{
+  var btn = document.getElementById("btn-dock-play");
+  var icon = document.getElementById("play-icon");
+  if (isPlaying) {{
+    isPlaying = false;
+    clearInterval(playTimer);
+    playTimer = null;
+    if (icon) icon.innerText = "▶";
+    if (btn) btn.classList.remove("active");
+  }} else {{
+    isPlaying = true;
+    if (icon) icon.innerText = "⏸";
+    if (btn) btn.classList.add("active");
+    var intervalMs = Math.max(16, Math.round(45 / animSpeed));
+    playTimer = setInterval(function() {{
+      var next = (curFrame + 1) % totalFrames;
+      goToFrame(next);
+    }}, intervalMs);
+  }}
+}}
+
+function setPlaybackSpeed(btn) {{
+  var speeds = [0.5, 1.0, 1.5, 2.0];
+  var currIdx = speeds.indexOf(animSpeed);
+  var nextIdx = (currIdx + 1) % speeds.length;
+  animSpeed = speeds[nextIdx];
+  if (btn) btn.innerText = animSpeed + "x";
+  if (isPlaying) {{
+    clearInterval(playTimer);
+    var intervalMs = Math.max(16, Math.round(45 / animSpeed));
+    playTimer = setInterval(function() {{
+      var next = (curFrame + 1) % totalFrames;
+      goToFrame(next);
+    }}, intervalMs);
+  }}
+}}
+
+function toggleTraceVisibility(traceIdx, isVisible) {{
+  var gd = document.getElementById("fundamental_curve_plot");
+  if (!gd) return;
+  Plotly.restyle(gd, {{ visible: isVisible ? true : "legendonly" }}, [traceIdx]);
+}}
+
+function toggleTheme() {{
+  var currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+  var newTheme = currentTheme === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", newTheme);
+  var icon = document.getElementById("theme-icon");
+  if (icon) icon.innerText = newTheme === "dark" ? "☀️" : "🌙";
+
+  var gd = document.getElementById("fundamental_curve_plot");
+  if (!gd) return;
+  var isDark = newTheme === "dark";
+  var bg = isDark ? "#090d16" : "#ffffff";
+  var grid = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+  var zeroline = isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.15)";
+  var fontColor = isDark ? "#94a3b8" : "#64748b";
+
+  if (isPlanar) {{
+    Plotly.relayout(gd, {{
+      paper_bgcolor: bg,
+      plot_bgcolor: bg,
+      "xaxis.gridcolor": grid,
+      "xaxis.zerolinecolor": zeroline,
+      "xaxis.color": fontColor,
+      "yaxis.gridcolor": grid,
+      "yaxis.zerolinecolor": zeroline,
+      "yaxis.color": fontColor
+    }});
+  }} else {{
+    Plotly.relayout(gd, {{
+      paper_bgcolor: bg,
+      plot_bgcolor: bg,
+      "scene.xaxis.gridcolor": grid,
+      "scene.xaxis.backgroundcolor": isDark ? "rgba(11, 15, 25, 0.8)" : "rgba(248, 250, 252, 0.5)",
+      "scene.xaxis.color": fontColor,
+      "scene.yaxis.gridcolor": grid,
+      "scene.yaxis.backgroundcolor": isDark ? "rgba(11, 15, 25, 0.8)" : "rgba(248, 250, 252, 0.5)",
+      "scene.yaxis.color": fontColor,
+      "scene.zaxis.gridcolor": grid,
+      "scene.zaxis.backgroundcolor": isDark ? "rgba(11, 15, 25, 0.8)" : "rgba(248, 250, 252, 0.5)",
+      "scene.zaxis.color": fontColor
+    }});
+  }}
+}}
+
+function toggleSidebar() {{
+  var sb = document.getElementById("sidebar");
+  var openBtn = document.getElementById("sidebar-expand-btn");
+  if (!sb) return;
+  sb.classList.toggle("collapsed");
+  var isCollapsed = sb.classList.contains("collapsed");
+  if (openBtn) openBtn.style.display = isCollapsed ? "flex" : "none";
+  setTimeout(function() {{
+    var gd = document.getElementById("fundamental_curve_plot");
+    if (gd) Plotly.Plots.resize(gd);
+  }}, 320);
 }}
 
 var gd = document.getElementById("fundamental_curve_plot");
@@ -1216,15 +1473,7 @@ if (gd) {{
       var frameIdx = (pt.customdata && pt.customdata[1] !== undefined)
         ? parseInt(pt.customdata[1], 10)
         : pt.pointNumber;
-      Plotly.animate(gd, ["frame_" + frameIdx], {{
-        mode: "immediate",
-        frame: {{ duration: 0, redraw: true }},
-        transition: {{ duration: 0 }}
-      }});
-      Plotly.relayout(gd, {{
-        "sliders[0].active": frameIdx
-      }});
-      updateHUDMetrics(frameIdx);
+      goToFrame(frameIdx);
     }}
   }});
 
@@ -1248,6 +1497,48 @@ if (gd) {{
     Plotly.Plots.resize(gd);
   }});
 }}
+
+// Listeners on window load
+window.addEventListener("DOMContentLoaded", function() {{
+  var slider = document.getElementById("dock-slider");
+  if (slider) {{
+    slider.addEventListener("input", function() {{
+      goToFrame(parseInt(this.value, 10));
+    }});
+  }}
+  var btnFirst = document.getElementById("btn-dock-first");
+  if (btnFirst) btnFirst.addEventListener("click", function() {{ goToFrame(0); }});
+  var btnPrev = document.getElementById("btn-dock-prev");
+  if (btnPrev) btnPrev.addEventListener("click", function() {{ goToFrame(curFrame - 1); }});
+  var btnPlay = document.getElementById("btn-dock-play");
+  if (btnPlay) btnPlay.addEventListener("click", togglePlay);
+  var btnNext = document.getElementById("btn-dock-next");
+  if (btnNext) btnNext.addEventListener("click", function() {{ goToFrame(curFrame + 1); }});
+  var btnLast = document.getElementById("btn-dock-last");
+  if (btnLast) btnLast.addEventListener("click", function() {{ goToFrame(totalFrames - 1); }});
+  var btnSpeed = document.getElementById("btn-dock-speed");
+  if (btnSpeed) btnSpeed.addEventListener("click", function() {{ setPlaybackSpeed(this); }});
+
+  var themeBtn = document.getElementById("theme-toggle-btn");
+  if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
+  var sbCloseBtn = document.getElementById("sidebar-toggle-btn");
+  if (sbCloseBtn) sbCloseBtn.addEventListener("click", toggleSidebar);
+  var sbOpenBtn = document.getElementById("sidebar-expand-btn");
+  if (sbOpenBtn) sbOpenBtn.addEventListener("click", toggleSidebar);
+
+  // Render KaTeX formulas if available
+  if (window.renderMathInElement) {{
+    renderMathInElement(document.body, {{
+      delimiters: [
+        {{ left: "$$", right: "$$", display: true }},
+        {{ left: "$", right: "$", display: false }},
+        {{ left: "\\(", right: "\\)", display: false }},
+        {{ left: "\\[", right: "\\]", display: true }}
+      ],
+      throwOnError: false
+    }});
+  }}
+}});
 """
 
     # Generate inner Plotly HTML snippet
@@ -1258,18 +1549,58 @@ if (gd) {{
         post_script=post_script_js,
     )
 
-    # Fullscreen responsive HTML template with CSS reset & HUD
+    # Fullscreen responsive HTML template with Collapsible Sidebar, KaTeX & Dock
     full_html = f"""<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{page_title}</title>
+  <!-- KaTeX for mathematical rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
   <style>
     * {{
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+    }}
+    :root, html[data-theme="light"] {{
+      --bg-app: #f8fafc;
+      --bg-canvas: #ffffff;
+      --bg-sidebar: #ffffff;
+      --text-title: #0f172a;
+      --text-body: #334155;
+      --text-muted: #64748b;
+      --border-ui: #e2e8f0;
+      --card-bg: #f8fafc;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --dock-bg: rgba(255, 255, 255, 0.94);
+      --dock-border: rgba(0, 0, 0, 0.08);
+      --dock-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.10), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+      --btn-bg: #f1f5f9;
+      --btn-hover: #e2e8f0;
+      --toggle-bg: #cbd5e1;
+    }}
+    html[data-theme="dark"] {{
+      --bg-app: #060911;
+      --bg-canvas: #090d16;
+      --bg-sidebar: #0f172a;
+      --text-title: #f8fafc;
+      --text-body: #cbd5e1;
+      --text-muted: #94a3b8;
+      --border-ui: rgba(255, 255, 255, 0.08);
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --dock-bg: rgba(15, 23, 42, 0.92);
+      --dock-border: rgba(255, 255, 255, 0.12);
+      --dock-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.6), 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+      --btn-bg: #1e293b;
+      --btn-hover: #334155;
+      --toggle-bg: #475569;
     }}
     html, body {{
       width: 100vw;
@@ -1278,93 +1609,611 @@ if (gd) {{
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: #0b0f19;
+      background-color: var(--bg-app);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       user-select: none;
+      color: var(--text-body);
     }}
-    #plot-container {{
+    #app-layout {{
+      display: flex;
       width: 100vw;
       height: 100vh;
-      position: absolute;
-      top: 0;
-      left: 0;
+      height: 100dvh;
+      position: relative;
       overflow: hidden;
     }}
-    .plotly-graph-div {{
-      width: 100vw !important;
-      height: 100vh !important;
+    /* Collapsible Sidebar */
+    #sidebar {{
+      width: 350px;
+      min-width: 350px;
+      height: 100%;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-ui);
+      display: flex;
+      flex-direction: column;
+      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.03);
     }}
-    /* Glassmorphism HUD Card */
-    #hud-card {{
-      position: absolute;
-      top: 18px;
-      left: 18px;
-      background: rgba(15, 23, 42, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      padding: 16px 20px;
-      color: #f1f5f9;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-      z-index: 1000;
-      min-width: 290px;
-      pointer-events: auto;
+    #sidebar.collapsed {{
+      margin-left: -350px;
     }}
-    #hud-card h2 {{
-      font-size: 15px;
-      font-weight: 700;
-      color: #38bdf8;
-      margin-bottom: 8px;
+    .sidebar-header {{
+      padding: 18px 20px 14px 20px;
+      border-bottom: 1px solid var(--border-ui);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }}
+    .sidebar-title-row {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .sidebar-title-group {{
       display: flex;
       align-items: center;
       gap: 8px;
     }}
-    #hud-class, .hud-badge {{
+    .brand-icon {{
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(37, 99, 235, 0.1);
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }}
+    .sidebar-title {{
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-title);
+      letter-spacing: -0.2px;
+    }}
+    .header-actions {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .icon-btn {{
+      background: var(--btn-bg);
+      border: 1px solid var(--border-ui);
+      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-title);
+      font-size: 13px;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }}
+    .icon-btn:hover {{
+      background: var(--btn-hover);
+    }}
+    .header-badges {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .hud-badge {{
       font-size: 11px;
       font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 4px;
-      background: rgba(56, 189, 248, 0.2);
-      color: #38bdf8;
+      padding: 3px 8px;
+      border-radius: 5px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+    }}
+    .badge-class {{
+      background: rgba(37, 99, 235, 0.12);
+      color: var(--accent);
+    }}
+    .badge-dim {{
+      {dim_badge_style}
+    }}
+
+    /* Scrollable HUD Container inside Sidebar (Preserving id="hud-card") */
+    #hud-card {{
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }}
+    #hud-card::-webkit-scrollbar {{
+      width: 5px;
+    }}
+    #hud-card::-webkit-scrollbar-thumb {{
+      background: var(--border-ui);
+      border-radius: 3px;
+    }}
+    .card-section {{
+      background: var(--card-bg);
+      border: 1px solid var(--border-ui);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }}
+    .section-title {{
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+    }}
+    .math-box {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }}
+    .math-row {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 0;
+    }}
+    .math-label {{
+      color: var(--text-muted);
+      font-size: 12px;
+    }}
+    .math-expr {{
+      font-weight: 600;
+      color: var(--text-title);
+    }}
+    .hud-grid {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }}
     .hud-row {{
       display: flex;
       justify-content: space-between;
-      margin: 4px 0;
+      align-items: center;
       font-size: 13px;
+      padding: 2px 0;
     }}
     .hud-label {{
-      color: #94a3b8;
+      color: var(--text-muted);
     }}
     #hud-s, #hud-r, #hud-kappa, #hud-tau, #hud-rho, .hud-value {{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
       font-weight: 600;
-      color: #f8fafc;
+      color: var(--text-title);
+    }}
+    .hud-vectors {{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-ui);
+    }}
+    .vec-item {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }}
+    .vec-tag {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 11px;
+    }}
+    .vec-t {{ background: rgba(16, 185, 129, 0.15); color: #10b981; }}
+    .vec-n {{ background: rgba(239, 68, 68, 0.15); color: #ef4444; }}
+    .vec-b {{ background: rgba(99, 102, 241, 0.15); color: #6366f1; }}
+    .vec-val {{
+      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+      font-weight: 500;
+      color: var(--text-body);
+    }}
+    .toggles-list {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }}
+    .switch-row {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      cursor: pointer;
+    }}
+    .switch-left {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .color-badge {{
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }}
+    .switch-name {{
+      font-size: 12px;
+      color: var(--text-body);
+    }}
+    .toggle-wrap {{
+      position: relative;
+      width: 32px;
+      height: 18px;
+    }}
+    .toggle-wrap input {{
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }}
+    .toggle-slider {{
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--toggle-bg);
+      transition: .2s;
+      border-radius: 18px;
+    }}
+    .toggle-slider:before {{
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }}
+    .toggle-wrap input:checked + .toggle-slider {{
+      background-color: var(--accent);
+    }}
+    .toggle-wrap input:checked + .toggle-slider:before {{
+      transform: translateX(14px);
+    }}
+    .theory-text {{
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-muted);
     }}
     .hud-hint {{
-      margin-top: 10px;
+      margin-top: 6px;
       font-size: 11px;
-      color: #64748b;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-ui);
       padding-top: 6px;
+    }}
+
+    /* Main Plot Container */
+    #plot-container {{
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-canvas);
+    }}
+    .plotly-graph-div {{
+      width: 100% !important;
+      height: 100% !important;
+    }}
+    @media (max-width: 768px) {{
+      .plotly-graph-div {{
+        width: 100vw !important;
+        height: 100vh !important;
+      }}
+    }}
+    /* Hide native Plotly slider and bulky buttons */
+    .slider-container, .updatemenu-container {{
+      display: none !important;
+    }}
+    .modebar-container {{
+      top: 14px !important;
+      right: 18px !important;
+      opacity: 0.65;
+      transition: opacity 0.2s ease;
+    }}
+    .modebar-container:hover {{
+      opacity: 1.0;
+    }}
+
+    /* Sidebar Floating Open Button (when collapsed) */
+    .sidebar-expand-btn {{
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 95;
+      background: var(--dock-bg);
+      border: 1px solid var(--dock-border);
+      border-radius: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      box-shadow: var(--dock-shadow);
+      color: var(--text-title);
+      font-size: 12px;
+      font-weight: 600;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }}
+    .sidebar-expand-btn:hover {{
+      background: var(--btn-hover);
+      transform: scale(1.02);
+    }}
+
+    /* Modern Floating Control Dock */
+    .control-dock {{
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--dock-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--dock-border);
+      border-radius: 36px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--dock-shadow);
+      z-index: 85;
+      user-select: none;
+    }}
+    .dock-buttons {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .dock-btn {{
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border-ui);
+      background: var(--btn-bg);
+      color: var(--text-title);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }}
+    .dock-btn:hover {{
+      background: var(--btn-hover);
+      transform: scale(1.06);
+    }}
+    .dock-btn.btn-play {{
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }}
+    .dock-btn.btn-play:hover {{
+      background: var(--accent-hover);
+    }}
+    .dock-slider-wrap {{
+      position: relative;
+      width: 190px;
+      display: flex;
+      align-items: center;
+    }}
+    .dock-slider {{
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      background: var(--border-ui);
+      outline: none;
+      cursor: pointer;
+      position: relative;
+      z-index: 2;
+    }}
+    .dock-slider::-webkit-slider-thumb {{
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      transition: transform 0.1s ease;
+    }}
+    .dock-slider::-webkit-slider-thumb:hover {{
+      transform: scale(1.2);
+    }}
+    .dock-slider::-moz-range-thumb {{
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }}
+    .dock-track-fill {{
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 5px;
+      background: var(--accent);
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 1;
+      width: 0%;
+    }}
+    .dock-readout {{
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-body);
+      white-space: nowrap;
+    }}
+    .dock-s-val {{
+      color: var(--accent);
+    }}
+    .dock-s-max {{
+      color: var(--text-muted);
+      font-weight: 500;
+    }}
+    .dock-pct {{
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 2px;
+    }}
+    .dock-btn-speed {{
+      width: auto;
+      padding: 4px 10px;
+      border-radius: 16px;
+      border: 1px solid var(--border-ui);
+      background: var(--btn-bg);
+      color: var(--text-title);
+      font-weight: 700;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }}
+    .dock-btn-speed:hover {{
+      background: var(--btn-hover);
     }}
   </style>
 </head>
 <body>
-  <div id="hud-card">
-    <h2>Teorema Fundamental de Curvas <span class="hud-badge" id="hud-class">{class_label}</span> <span class="hud-badge" style="{dim_badge_style}">{mode_label}</span></h2>
-    <div class="hud-row"><span class="hud-label">Comprimento de Arco (s):</span><span class="hud-value" id="hud-s">{init_s:.3f}</span></div>
-    <div class="hud-row"><span class="hud-label">Posição r(s):</span><span class="hud-value" id="hud-r">{init_pos_str}</span></div>
-    <div class="hud-row"><span class="hud-label">Curvatura κ(s):</span><span class="hud-value" id="hud-kappa">{init_k:.3f}</span></div>
-    <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">{init_t_str}</span></div>
-    <div class="hud-row"><span class="hud-label">Raio Curvatura ρ(s):</span><span class="hud-value" id="hud-rho">{init_rho}</span></div>
-    <div class="hud-hint">{hint_str}</div>
-  </div>
-  <div id="plot-container">
-    {plotly_snippet}
+  <div id="app-layout">
+    <!-- Collapsible Modern Sidebar -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title-row">
+          <div class="sidebar-title-group">
+            <span class="brand-icon">∫</span>
+            <h1 class="sidebar-title">Teorema Fundamental de Curvas</h1>
+          </div>
+          <div class="header-actions">
+            <button id="theme-toggle-btn" class="icon-btn" title="Alternar Modo Claro/Escuro" aria-label="Alternar Tema">
+              <span id="theme-icon">🌙</span>
+            </button>
+            <button id="sidebar-toggle-btn" class="icon-btn" title="Recolher Painel" aria-label="Recolher Painel">
+              <span>◀</span>
+            </button>
+          </div>
+        </div>
+        <div class="header-badges">
+          <span class="hud-badge badge-class" id="hud-class">{class_label}</span>
+          <span class="hud-badge badge-dim">{mode_label}</span>
+        </div>
+      </div>
+
+      <!-- Main Scrollable Content Container (id="hud-card" preserved for test compatibility) -->
+      <div id="hud-card">
+        <!-- Section 1: Fórmulas Intrínsecas (KaTeX) -->
+        <div class="card-section">
+          <div class="section-title">Fórmulas Intrínsecas</div>
+          <div class="math-box">
+            <div class="math-row">
+              <span class="math-label">Curvatura:</span>
+              <span class="math-expr" id="math-kappa">$$\kappa(s) = {kappa_tex}$$</span>
+            </div>
+            <div class="math-row">
+              <span class="math-label">Torção:</span>
+              <span class="math-expr" id="math-tau">$$\tau(s) = {tau_tex}$$</span>
+            </div>
+            <div class="math-row">
+              <span class="math-label">Intervalo:</span>
+              <span class="math-expr">$$s \in [{s0:.2f}, {s1:.2f}]$$</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Grandezas Instantâneas (Live HUD) -->
+        <div class="card-section">
+          <div class="section-title">Grandezas Instantâneas</div>
+          <div class="hud-grid">
+            <div class="hud-row"><span class="hud-label">Comprimento de Arco (s):</span><span class="hud-value" id="hud-s">{init_s:.3f}</span></div>
+            <div class="hud-row"><span class="hud-label">Posição r(s):</span><span class="hud-value" id="hud-r">{init_pos_str}</span></div>
+            <div class="hud-row"><span class="hud-label">Curvatura κ(s):</span><span class="hud-value" id="hud-kappa">{init_k:.3f}</span></div>
+            <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">{init_t_str}</span></div>
+            <div class="hud-row"><span class="hud-label">Raio Curvatura ρ(s):</span><span class="hud-value" id="hud-rho">{init_rho}</span></div>
+          </div>
+          <!-- Frame Vectors -->
+          <div class="hud-vectors">
+            {vec_html}
+          </div>
+        </div>
+
+        <!-- Section 3: Visibilidade do Aparato -->
+        <div class="card-section">
+          <div class="section-title">Visibilidade do Aparato</div>
+          <div class="toggles-list">
+            {switches_markup}
+          </div>
+        </div>
+
+        <!-- Section 4: Fundamentação Teórica -->
+        <div class="card-section">
+          <div class="section-title">Fundamentação Teórica</div>
+          <p class="theory-text">{theory_summary}</p>
+          <div class="hud-hint">{hint_str}</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Floating Expand Button when Sidebar is Collapsed -->
+    <button id="sidebar-expand-btn" class="sidebar-expand-btn" title="Expandir Painel Lateral">
+      <span>▶</span> <span>Painel</span>
+    </button>
+
+    <!-- Canvas Container -->
+    <main id="plot-container">
+      {plotly_snippet}
+    </main>
+
+    <!-- Modern Floating Bottom Dock -->
+    <div id="control-dock" class="control-dock">
+      <div class="dock-buttons">
+        <button id="btn-dock-first" class="dock-btn" title="Início (s₀)">⏮</button>
+        <button id="btn-dock-prev" class="dock-btn" title="Passo Anterior">◀</button>
+        <button id="btn-dock-play" class="dock-btn btn-play" title="Reproduzir / Pausar">
+          <span id="play-icon">▶</span>
+        </button>
+        <button id="btn-dock-next" class="dock-btn" title="Próximo Passo">▶</button>
+        <button id="btn-dock-last" class="dock-btn" title="Fim (s₁)">⏭</button>
+      </div>
+
+      <div class="dock-slider-wrap">
+        <input type="range" id="dock-slider" min="0" max="{num_frames - 1}" value="0" step="1" class="dock-slider" aria-label="Comprimento de arco s">
+        <div class="dock-track-fill" id="dock-track-fill"></div>
+      </div>
+
+      <div class="dock-readout">
+        <span>s =</span>
+        <span class="dock-s-val" id="dock-s-val">{init_s:.3f}</span>
+        <span class="dock-s-max">/ {s1:.3f}</span>
+        <span class="dock-pct" id="dock-pct">0%</span>
+      </div>
+
+      <button id="btn-dock-speed" class="dock-btn-speed" title="Velocidade da Reprodução">1x</button>
+    </div>
   </div>
 </body>
 </html>

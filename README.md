@@ -6,14 +6,13 @@
 [![SciPy](https://img.shields.io/badge/SciPy-1.10%2B-8CAAE6.svg?logo=scipy)](https://scipy.org/)
 [![SymPy](https://img.shields.io/badge/SymPy-1.12%2B-3B5526.svg?logo=sympy)](https://www.sympy.org/)
 [![Plotly](https://img.shields.io/badge/Plotly-5.15%2B-3F4F75.svg?logo=plotly)](https://plotly.com/)
-[![Tests](https://img.shields.io/badge/Tests-244%20passed-success.svg)](https://github.com/gabe-rbo/Teorema-Fundamental-de-Curvas)
+[![Tests](https://img.shields.io/badge/Tests-250%20passed-success.svg)](https://github.com/gabe-rbo/Teorema-Fundamental-de-Curvas)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Uma ferramenta computacional e acadêmica em Python que reconstrói curvas planas e espaciais a partir de suas funções intrínsecas de **curvatura** $\kappa(s)$ e **torção** $\tau(s)$ parametrizadas pelo comprimento de arco $s$. O sistema adota uma **arquitetura dual otimizada**:
-- **Curvas Planas ($\tau(s) \equiv 0$):** Reconstruídas analiticamente via **Teorema Fundamental das Curvas Planas** por quadratura direta ($\theta(s) = \int \kappa(u)\,du$ e $r(s) = \int (\cos\theta, \sin\theta)\,du$) sem resolver EDOs tridimensionais, gerando visualização puramente em **2D cartesiano** com diedro de Frenet $\{T, N\}$, retas tangente e normal, e círculo osculador em escala 1:1.
+Uma ferramenta computacional e acadêmica em Python que reconstrói curvas planas e espaciais a partir de suas funções intrínsecas de **curvatura** $\kappa(s)$ e **torção** $\tau(s)$ parametrizadas pelo comprimento de arco $s$. O sistema adota uma **arquitetura dual otimizada** com interface web moderna, científica e responsiva:
+- **Curvas Planas ($\tau(s) \equiv 0$):** Reconstruídas analiticamente via **Teorema Fundamental das Curvas Planas** por quadratura direta ($\theta(s) = \int \kappa(u)\,du$ e $r(s) = \int (\cos\theta, \sin\theta)\,du$) sem resolver EDOs tridimensionais, gerando visualização puramente em **2D cartesiano** com diedro de Frenet $\{T, N\}$, retas tangente e normal, e círculo osculador em escala isotrópica 1:1.
 - **Curvas Espaciais ($\tau(s) \not\equiv 0$):** Integradas numericamente pelo sistema diferencial de **Frenet-Serret** no grupo de Lie $\mathrm{SO}(3)$ com ortonormalização contínua de Gram-Schmidt, gerando cena **3D WebGL** com triedro $\{T, N, B\}$, planos osculador, normal e retificante, círculo osculador e vetor de Darboux.
-
-Ambos os modos contam com classificação determinística em 8 famílias geométricas, interface web interativa em **Plotly HTML full-screen** (`100vw` $\times$ `100vh`), slider contínuo de navegação e suporte a clique na curva (`plotly_click`).
+- **Novo Design de Interface:** Painel lateral recolhível (sidebar) que deixa a área do gráfico **100% desobstruída**, alternância instantânea entre **Tema Claro (padrão)** e **Tema Escuro**, fórmulas matemáticas renderizadas com **KaTeX**, barra de controle flutuante moderna no rodapé (**Floating Dock**) com slider suave e switches interativos para visibilidade do aparato.
 
 ---
 
@@ -40,15 +39,17 @@ Ambos os modos contam com classificação determinística em 8 famílias geomét
    - [6. Espiral Logarítmica](#6-espiral-logarítmica-kappas--frac1as--b-tau--0)
    - [7. Curva Plana Geral](#7-curva-plana-geral-tau-equiv-0)
    - [8. Curva Espacial Geral](#8-curva-espacial-geral-tau-not-equiv-0)
-5. [Interface Interativa Dual (2D e 3D) e Recursos Visuais](#interface-interativa-dual-2d-e-3d-e-recursos-visuais)
+5. [Interface Interativa Dual (2D e 3D) e Novo Design](#interface-interativa-dual-2d-e-3d-e-novo-design)
+   - [Painel Lateral Recolhível (Sidebar) e Canvas 100% Desobstruído](#painel-lateral-recolhível-sidebar-e-canvas-100-desobstruído)
+   - [Alternância de Tema Claro / Escuro (Padrão Claro Matemático)](#alternância-de-tema-claro--escuro-padrão-claro-matemático)
+   - [Renderização Tipográfica com KaTeX](#renderização-tipográfica-com-katex)
+   - [Barra de Controle Flutuante no Rodapé (Floating Dock)](#barra-de-controle-flutuante-no-rodapé-floating-dock)
+   - [Switches de Visibilidade do Aparato](#switches-de-visibilidade-do-aparato)
    - [Visualização Puramente 2D para Curvas Planas ($\tau \equiv 0$)](#visualização-puramente-2d-para-curvas-planas-tau-equiv-0)
    - [Visualização 3D WebGL para Curvas Espaciais ($\tau \not\equiv 0$)](#visualização-3d-webgl-para-curvas-espaciais-tau-not-equiv-0)
-   - [Layout Responsivo 100vw $\times$ 100vh](#layout-responsivo-100vw-times-100vh)
-   - [Controle Deslizante (Slider) e Animação Seletiva](#controle-deslizante-slider-e-animação-seletiva)
    - [Navegação Click-to-Point (`plotly_click`)](#navegação-click-to-point-plotly_click)
-   - [Cartão Flutuante HUD (Heads-Up Display)](#cartão-flutuante-hud-heads-up-display)
 6. [Arquitetura de Software e Motor Matemático](#arquitetura-de-software-e-motor-matemático)
-7. [Bateria de Testes Automatizados (244 Testes)](#bateria-de-testes-automatizados-244-testes)
+7. [Bateria de Testes Automatizados (250 Testes)](#bateria-de-testes-automatizados-250-testes)
 
 ---
 
@@ -291,71 +292,81 @@ python3 teorema-fundamental-curvas.py "1 + 0.5*cos(s)" "0.5*s" -i 0 10
 
 ---
 
-## Interface Interativa Dual (2D e 3D) e Recursos Visuais
+## Interface Interativa Dual (2D e 3D) e Novo Design
 
-A visualização gerada é uma aplicação web autônoma e completa empacotada em um único arquivo HTML gerado pelo Plotly. O sistema chaveia deterministicamente entre renderização 2D e 3D de acordo com a geometria da curva:
+A visualização gerada é uma aplicação web autônoma de alta sofisticação empacotada em um único arquivo HTML gerado pelo Plotly com **layout de painel lateral (sidebar)** e **área de gráfico 100% desobstruída**:
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│  Teorema Fundamental de Curvas ── [ circulo | helice_circular ]        │
-│                                                                        │
-│   ┌─── HUD Card (Glassmorphic) ────────┐                               │
-│   │ s: 3.1416                          │    (Modo 2D Cartesiano ou     │
-│   │ r: (x, y) [2D] ou (x, y, z) [3D]   │     Modo 3D WebGL)            │
-│   │ T: [Tx, Ty] (verde)                │       ● r(s)                  │
-│   │ N: [Nx, Ny] (vermelho)             │      /|\  T(verde), N(vermelho)│
-│   │ B: [Bx, By, Bz] (azul, em 3D)      │     / | \ B(azul, apenas 3D)  │
-│   │ κ: 1.000000 | τ: 0.000000          │    [Reta Tangente / Normal]   │
-│   │ ρ: 1.000000                        │    [Círculo Osculador]        │
-│   └────────────────────────────────────┘                               │
-│                                                                        │
-│  [◄] [►] ───●───────────────────────────────────────────────────────   │
-│          s = 3.1416 / 6.2832 (Clique na curva para navegar)            │
-└────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│ [≡] ☀️/🌙  Teorema Fundamental de Curvas ── [ circulo | 2D ]                              │
+├──────────────────────┬────────────────────────────────────────────────────────────────────┤
+│  PAINEL LATERAL      │                                                                    │
+│  (Recolhível [◀])    │                         CANVAS PRINCIPAL                           │
+│                      │                                                                    │
+│  📐 Fórmulas KaTeX   │                     (Área do gráfico 100% limpa,                   │
+│   κ(s) = 1           │                      sem caixas flutuando sobre a curva)           │
+│   τ(s) = 0           │                                                                    │
+│   s ∈ [0, 6.28]      │                                                                    │
+│                      │                          ● r(s)                                    │
+│  📊 Métricas Atuais  │                         / \                                        │
+│   s: 3.142           │                        /   \  T (esmeralda), N (rubi)              │
+│   r: (-1.00, 0.00)   │                       /     \ B (violeta, em 3D)                  │
+│   κ: 1.000           │                      [Círculo Osculador âmbar]                     │
+│   ρ: 1.000           │                                                                    │
+│                      │                                                                    │
+│  🔘 Visibilidade     │                                                                    │
+│   [x] Curva r(s)     │                                                                    │
+│   [x] Tangente T     │                                                                    │
+│   [x] Normal N       │                                                                    │
+│   [x] Círculo Osc.   │                                                                    │
+│                      │           ┌────────────────────────────────────────┐               │
+│  ℹ️ Teoria & Ajuda   │           │ [⏮] [◀] [ ▶ ] [▶] [⏭]  ──●── s: 3.142  │ (Dock Rodapé) │
+│                      │           └────────────────────────────────────────┘               │
+└──────────────────────┴────────────────────────────────────────────────────────────────────┘
 ```
+
+### Painel Lateral Recolhível (Sidebar) e Canvas 100% Desobstruído
+- **Área do Gráfico Livre:** Todo o conteúdo informativo, fórmulas, leitura de métricas instantâneas e controles de visibilidade residem em uma barra lateral retrátil (largura de 350px). Isso elimina caixas e cards sobrepostos à curva, proporcionando visibilidade completa da geometria.
+- **Recolhimento com 1 Clique:** O botão `[◀]` recolhe a barra lateral com transição CSS suave, expandindo o gráfico para 100% da largura. Um botão flutuante discreto `[▶ Painel]` no canto superior esquerdo permite restaurar o painel instantaneamente.
+
+### Alternância de Tema Claro / Escuro (Padrão Claro Matemático)
+- **Tema Claro (Padrão):** Fundo branco puro `#ffffff` com grid sutil e de alto contraste, tipografia em ardósia/grafite escuro `#0f172a` e acabamento limpo estilo publicação científica e ambientes como Desmos e GeoGebra.
+- **Tema Escuro (Slate/Zinc):** Fundo grafite profundo `#090d16` com eixos e linhas refinadas sem brilho fluorescente excessivo.
+- **Toggle em Tempo Real:** O botão no cabeçalho (ícone ☀️/🌙) alterna o tema instantaneamente atualizando os eixos e o fundo do canvas via `Plotly.relayout` sem recarregar a página.
+
+### Renderização Tipográfica com KaTeX
+- Fórmulas intrínsecas de curvatura $\kappa(s)$ e torção $\tau(s)$, bem como o intervalo do comprimento de arco $s \in [s_0, s_1]$, são renderizadas em tempo de execução via **KaTeX** com tipografia matemática estilo TeX de alta qualidade.
+- Coordenadas e grandezas métricas são formatadas em fontes monospace de alta precisão (`JetBrains Mono`, `ui-monospace`).
+
+### Barra de Controle Flutuante no Rodapé (Floating Dock)
+- Substitui os controles nativos cinzas do Plotly por uma barra translúcida elegante estilo *dock* centralizada na base:
+  - **Botões de Transporte:** `[⏮]` início ($s_0$), `[◀]` passo anterior, `[ ▶ / ⏸ ]` reproduzir/pausar contínuo, `[▶]` próximo passo, `[⏭]` fim ($s_1$).
+  - **Slider Contínuo Fino:** Barra de arraste moderna em HTML5/CSS com preenchimento dinâmico de progresso.
+  - **Leitura em Tempo Real:** Indicador numérico `$s = 3.142 / 6.283$` acompanhado de percentual (`50%`).
+  - **Seletor de Velocidade:** Botão de ciclo de velocidade (`0.5x`, `1x`, `1.5x`, `2x`).
+
+### Switches de Visibilidade do Aparato
+- Substitui a legenda nativa do Plotly por seletores modernos no painel lateral. Cada elemento diferencial pode ser ligado ou desligado individualmente através de switches tipo pílula com indicador de cor correspondente:
+  - **Curva $r(s)$**: Azul Safira (`#2563eb`).
+  - **Ponto Ativo**: Âmbar vibrante (`#f59e0b`).
+  - **Vetor Tangente $\vec{T}$**: Verde Esmeralda (`#10b981`).
+  - **Vetor Normal $\vec{N}$**: Vermelho Rubi (`#ef4444`).
+  - **Vetor Binormal $\vec{B}$ (em 3D)**: Violeta/Índigo (`#6366f1`).
+  - **Retas Tangente e Normal**: Linhas tracejadas finas.
+  - **Círculo Osculador**: Contorno contínuo em Âmbar (`#f59e0b`).
+  - **Planos Osculador, Normal e Retificante (em 3D)**: Superfícies semitransparentes elegantes com opacidade balanceada.
 
 ### Visualização Puramente 2D para Curvas Planas ($\tau \equiv 0$)
 Quando a torção é identicamente nula, a curva é renderizada estritamente no espaço cartesiano 2D utilizando `go.Scatter` (sem inicialização de contexto 3D WebGL nem rotações de câmera esférica):
 - **Escala Geométrica Rígida 1:1:** O layout é configurado com `yaxis=dict(scaleanchor="x", scaleratio=1)`, garantindo proporção euclidiana perfeita de 1 unidade em $y$ para 1 unidade em $x$. Isso impede rigorosamente que o círculo osculador deforme em elipse durante o zoom, pan ou redimensionamento de janela.
-- **Aparato Planar Especializado (7 Traços com Legenda Interativa):**
-  1. *Curva $r(s)$*: Trajetória no plano $xy$ colorida de acordo com a curvatura ou gradiente de $s$.
-  2. *Ponto Ativo $r(s_i)$*: Marcador esférico de destaque na posição $(x_i, y_i)$.
-  3. *Vetor Tangente $\vec{T}(s)$*: Seta verde unitária tangente à curva.
-  4. *Vetor Normal Principal $\vec{N}(s)$*: Seta vermelha unitária perpendicular ao vetor velocidade.
-  5. *Reta Tangente $L_T(u)$*: Linha tracejada tangente estendida no ponto ativo.
-  6. *Reta Normal $L_N(u)$*: Linha tracejada ortogonal passando pelo centro de curvatura.
-  7. *Círculo Osculador*: Circunferência no plano $xy$ centrada em $c(s) = r(s) + \rho(s) \vec{N}(s)$ com raio $\rho(s) = 1/|\kappa(s)|$.
-- **HUD Bidimensional Glassmorphic:** Exibe $(x, y)$, componentes $[T_x, T_y]$, $[N_x, N_y]$, $\kappa(s)$, torção fixa `0.000 (Plana)` e raio de curvatura $\rho(s)$.
+- **Aparato Planar (7 Traços):** Curva, Ponto Ativo, $\vec{T}$, $\vec{N}$, Reta Tangente, Reta Normal e Círculo Osculador.
 
 ### Visualização 3D WebGL para Curvas Espaciais ($\tau \not\equiv 0$)
 Para curvas com torção não nula, o motor instancia uma cena tridimensional interativa acelerada via WebGL:
-- **Aparato Tridimensional Completo (10 Traços com Legenda Interativa):**
-  1. *Curva $r(s)$*: Linha tridimensional contínua em $\mathbb{R}^3$.
-  2. *Ponto Ativo $r(s_i)$*: Marcador esférico de destaque na posição tridimensional $(x_i, y_i, z_i)$.
-  3. *Vetor Tangente $\vec{T}(s)$*: Segmento cônico destacado em **verde**.
-  4. *Vetor Normal $\vec{N}(s)$*: Segmento cônico destacado em **vermelho**.
-  5. *Vetor Binormal $\vec{B}(s)$*: Segmento cônico destacado em **azul**.
-  6. *Reta Tangente*: Segmento linear estendido tangencialmente através do ponto ativo.
-  7. *Plano Osculador*: Superfície poligonal semitransparente gerada no plano $\{\vec{T}, \vec{N}\}$.
-  8. *Plano Normal*: Superfície semitransparente gerada no plano $\{\vec{N}, \vec{B}\}$.
-  9. *Plano Retificante*: Superfície semitransparente gerada no plano $\{\vec{T}, \vec{B}\}$.
-  10. *Círculo Osculador*: Círculo tridimensional com raio $\rho(s) = 1/\kappa(s)$ repousando no plano osculador.
-- **HUD Tridimensional Glassmorphic:** Exibe $(x, y, z)$, componentes $\{T, N, B\}$, $\kappa(s)$, $\tau(s)$ e $\rho(s)$.
-
-### Layout Responsivo 100vw $\times$ 100vh
-- Reset completo de CSS (`margin: 0`, `padding: 0`, `overflow: hidden`).
-- Dimensões fixadas via unidade moderna de viewport dinâmico `100dvh` e `100vw`, eliminando quaisquer barras de rolagem indesejadas em dispositivos móveis e desktops.
-- Event listener JavaScript para `window.resize` com `Plotly.Plots.resize` automático.
-
-### Controle Deslizante (Slider) e Animação Seletiva
-- Slider inferior interativo que permite percorrer continuamente o parâmetro de comprimento de arco $s$ de $s_0$ a $s_1$.
-- Otimização de renderização de alto desempenho: os frames de animação atualizam seletivamente apenas os traços dinâmicos do aparato, preservando a geometria da curva estática em cache na memória gráfica.
+- **Aparato Tridimensional (10 Traços):** Curva, Ponto Ativo, Triedro unitário $\{T, N, B\}$, Reta Tangente, Planos Osculador, Normal e Retificante, e Círculo Osculador 3D.
 
 ### Navegação Click-to-Point (`plotly_click`)
-- Ao clicar em qualquer ponto da curva (seja em 2D ou 3D), um ouvinte de eventos `plotly_click` intercepta o evento, extrai o índice exato através do array `customdata` e sincroniza instantaneamente a posição do slider e todo o aparato diferencial para o ponto selecionado.
-
-### Cartão Flutuante HUD (Heads-Up Display)
-Um painel flutuante estilizado em *glassmorphism* (efeito de vidro com transparência e desfoque de fundo) exibe as grandezas métricas locais em tempo real com atualização ultra-rápida via JavaScript direto no DOM.
+- Ao clicar em qualquer ponto da curva (seja em 2D ou 3D), o evento `plotly_click` intercepta a interação, extrai o vértice exato através do array `customdata` e sincroniza instantaneamente a posição do slider, o dock inferior, os vetores e todas as métricas do painel lateral.
 
 ---
 
@@ -404,9 +415,9 @@ O projeto segue rigorosos princípios de separação de responsabilidades e robu
 
 ---
 
-## Bateria de Testes Automatizados (244 Testes)
+## Bateria de Testes Automatizados (250 Testes)
 
-O projeto conta com uma suíte exaustiva de testes automatizados com `pytest`, totalizando **244 testes rigorosos** aprovados com 100% de êxito.
+O projeto conta com uma suíte exaustiva de testes automatizados com `pytest`, totalizando **250 testes rigorosos** aprovados com 100% de êxito.
 
 ### Estrutura dos Níveis de Teste
 
@@ -418,8 +429,8 @@ O projeto conta com uma suíte exaustiva de testes automatizados com `pytest`, t
 | **Tier 3 (Combinações Cruzadas)** | `test_teorema_fundamental.py` | 5 | Curvatura/torção variáveis, Teorema de Lancret, espirais de Cornu e logarítmica. |
 | **Tier 4 (Benchmarks Analíticos)** | `test_teorema_fundamental.py` | 7 | Precisão analítica $< 10^{-3}$ (semicírculo $R=0.5$, hélice circular, isometria $SE(3)$, clotoide). |
 | **Curvas Planas 2D (Quadratura)** | `test_teorema_curvas_planas_2d.py` | 9 | Verificação de bypass total do `solve_ivp` para $\tau=0$, fechamento de círculo $< 10^{-14}$, diedro 2D, layout cartesiano 1:1 e traços 2D. |
-| **Tier 5 & Hardening Adversarial** | `test_adversarial_tier5.py`, `test_adversarial_m4.py`, `test_curva_engine_stress.py`, `test_curva_viz_stress.py`, `test_adversarial_m2.py` | 171 | Testes adversariais de AST, resiliência do visualizador Plotly, estabilidade numérica de integradores e segurança. |
-| **Total** | — | **244** | **100% dos testes aprovados.** |
+| **Tier 5 & Hardening Adversarial** | `test_adversarial_tier5.py`, `test_adversarial_m4.py`, `test_curva_engine_stress.py`, `test_curva_viz_stress.py`, `test_adversarial_m2.py` | 177 | Testes adversariais de AST, resiliência do visualizador Plotly, novos componentes de UI (sidebar, dock, KaTeX, temas), estabilidade numérica e segurança. |
+| **Total** | — | **250** | **100% dos testes aprovados.** |
 
 ### Como Executar os Testes
 
@@ -428,9 +439,9 @@ Para executar toda a suíte de testes com relatório verboso:
 pytest -v
 ```
 
-Para executar apenas a suíte de curvas planas e testes analíticos fundamentais:
+Para executar apenas a suíte de componentes visuais modernos e curvas planas:
 ```bash
-pytest -v tests/test_teorema_curvas_planas_2d.py tests/test_teorema_fundamental.py
+pytest -v tests/test_curva_viz_stress.py -k TestModernUIComponents
 ```
 
 ---
