@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teorema Fundamental de Curvas — Hélice Circular</title>
+  <title>Teorema Fundamental de Curvas — Hélice Circular (3D)</title>
   <style>
     * {
       box-sizing: border-box;
@@ -94,13 +94,13 @@
 </head>
 <body>
   <div id="hud-card">
-    <h2>Teorema Fundamental de Curvas <span class="hud-badge" id="hud-class">Hélice Circular</span></h2>
+    <h2>Teorema Fundamental de Curvas <span class="hud-badge" id="hud-class">Hélice Circular</span> <span class="hud-badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">3D</span></h2>
     <div class="hud-row"><span class="hud-label">Comprimento de Arco (s):</span><span class="hud-value" id="hud-s">0.000</span></div>
     <div class="hud-row"><span class="hud-label">Posição r(s):</span><span class="hud-value" id="hud-r">(0.00, 0.00, 0.00)</span></div>
     <div class="hud-row"><span class="hud-label">Curvatura κ(s):</span><span class="hud-value" id="hud-kappa">1.000</span></div>
     <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">1.000</span></div>
     <div class="hud-row"><span class="hud-label">Raio Curvatura ρ(s):</span><span class="hud-value" id="hud-rho">1.000</span></div>
-    <div class="hud-hint">Triedro de Frenet, Planos e Círculo Osculador — clique na curva ou arraste o controle</div>
+    <div class="hud-hint">Triedro de Frenet {T, N, B}, Planos e Círculo Osculador — clique na curva ou arraste o controle</div>
   </div>
   <div id="plot-container">
     <div style="height:100%; width:100%;">                        <script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
@@ -121,9 +121,17 @@ function updateHUDMetrics(idx) {
   var tElem = document.getElementById("hud-tau");
   var rhoElem = document.getElementById("hud-rho");
   if (sElem) sElem.innerText = m.s.toFixed(3);
-  if (rElem) rElem.innerText = "(" + m.x.toFixed(2) + ", " + m.y.toFixed(2) + ", " + m.z.toFixed(2) + ")";
+  if (rElem) {
+    if (m.is_planar) {
+      rElem.innerText = "(" + m.x.toFixed(2) + ", " + m.y.toFixed(2) + ")";
+    } else {
+      rElem.innerText = "(" + m.x.toFixed(2) + ", " + m.y.toFixed(2) + ", " + m.z.toFixed(2) + ")";
+    }
+  }
   if (kElem) kElem.innerText = m.kappa.toFixed(3);
-  if (tElem) tElem.innerText = m.tau.toFixed(3);
+  if (tElem) {
+    tElem.innerText = m.is_planar ? "0.000 (Plana)" : m.tau.toFixed(3);
+  }
   if (rhoElem) rhoElem.innerText = m.rho === null ? "∞" : m.rho.toFixed(3);
 }
 

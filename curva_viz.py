@@ -306,7 +306,386 @@ def _build_apparatus_traces(
     return [t1, t2, t3, t4, t5, t6, t7, t8, t9]
 
 
-def build_curve_figure(
+def _compute_circle_coords_2d(
+    P: np.ndarray,
+    T: np.ndarray,
+    N: np.ndarray,
+    k_val: float,
+    span: float,
+    num_pts: int = 65,
+) -> tuple[list[float], list[float]]:
+    """Compute 2D coordinates of the osculating circle at point P in R^2."""
+    if abs(k_val) <= 1e-5:
+        return [], []
+    rho = 1.0 / abs(k_val)
+    if rho > 10.0 * span:
+        return [], []
+
+    center = P[:2] + (1.0 / k_val) * N[:2]
+    theta = np.linspace(0.0, 2.0 * np.pi, num_pts)
+    circle_pts = (
+        center[:, None]
+        - (1.0 / k_val) * N[:2, None] * np.cos(theta)
+        + rho * T[:2, None] * np.sin(theta)
+    )
+    return circle_pts[0, :].tolist(), circle_pts[1, :].tolist()
+
+
+def _build_apparatus_traces_2d(
+    P: np.ndarray,
+    T: np.ndarray,
+    N: np.ndarray,
+    L_vec: float,
+    L_tan: float,
+    k_val: float,
+    span: float,
+    is_initial: bool = False,
+) -> list[go.Scatter]:
+    """
+    Build traces 1 through 6 for the 2D planar Frenet apparatus.
+    """
+    lt_x = [float(P[0] - L_tan * T[0]), float(P[0] + L_tan * T[0])]
+    lt_y = [float(P[1] - L_tan * T[1]), float(P[1] + L_tan * T[1])]
+
+    ln_x = [float(P[0] - L_tan * N[0]), float(P[0] + L_tan * N[0])]
+    ln_y = [float(P[1] - L_tan * N[1]), float(P[1] + L_tan * N[1])]
+
+    cx, cy = _compute_circle_coords_2d(P, T, N, k_val, span)
+
+    if not is_initial:
+        return [
+            # Trace 1: Ponto Ativo
+            go.Scatter(x=[float(P[0])], y=[float(P[1])]),
+            # Trace 2: Vetor Tangente T
+            go.Scatter(
+                x=[float(P[0]), float(P[0] + L_vec * T[0])],
+                y=[float(P[1]), float(P[1] + L_vec * T[1])],
+            ),
+            # Trace 3: Vetor Normal N
+            go.Scatter(
+                x=[float(P[0]), float(P[0] + L_vec * N[0])],
+                y=[float(P[1]), float(P[1] + L_vec * N[1])],
+            ),
+            # Trace 4: Reta Tangente L_T
+            go.Scatter(x=lt_x, y=lt_y),
+            # Trace 5: Reta Normal L_N
+            go.Scatter(x=ln_x, y=ln_y),
+            # Trace 6: Círculo Osculador
+            go.Scatter(x=cx, y=cy),
+        ]
+
+    # Trace 1: Ponto Ativo r(s)
+    t1 = go.Scatter(
+        x=[float(P[0])],
+        y=[float(P[1])],
+        mode="markers",
+        name="Ponto Ativo r(s)",
+        marker=dict(size=10, color="#ffea00", symbol="circle"),
+        hovertemplate="<b>Ponto Ativo r(s)</b><br>x: %{x:.3f}<br>y: %{y:.3f}<extra></extra>",
+    )
+    # Trace 2: Vetor Tangente T
+    t2 = go.Scatter(
+        x=[float(P[0]), float(P[0] + L_vec * T[0])],
+        y=[float(P[1]), float(P[1] + L_vec * T[1])],
+        mode="lines+markers",
+        name="Vetor Tangente T",
+        line=dict(color="#00e676", width=5),
+        marker=dict(size=[0, 8], color="#00e676"),
+        hovertemplate="<b>Vetor Tangente T</b><extra></extra>",
+    )
+    # Trace 3: Vetor Normal N
+    t3 = go.Scatter(
+        x=[float(P[0]), float(P[0] + L_vec * N[0])],
+        y=[float(P[1]), float(P[1] + L_vec * N[1])],
+        mode="lines+markers",
+        name="Vetor Normal N",
+        line=dict(color="#ff1744", width=5),
+        marker=dict(size=[0, 8], color="#ff1744"),
+        hovertemplate="<b>Vetor Normal N</b><extra></extra>",
+    )
+    # Trace 4: Reta Tangente L_T
+    t4 = go.Scatter(
+        x=lt_x,
+        y=lt_y,
+        mode="lines",
+        name="Reta Tangente L_T",
+        line=dict(color="rgba(0, 230, 118, 0.65)", width=2, dash="dash"),
+        hovertemplate="<b>Reta Tangente L_T</b><extra></extra>",
+    )
+    # Trace 5: Reta Normal L_N
+    t5 = go.Scatter(
+        x=ln_x,
+        y=ln_y,
+        mode="lines",
+        name="Reta Normal L_N",
+        line=dict(color="rgba(255, 23, 68, 0.45)", width=2, dash="dot"),
+        hovertemplate="<b>Reta Normal L_N</b><extra></extra>",
+    )
+    # Trace 6: Círculo Osculador
+    t6 = go.Scatter(
+        x=cx,
+        y=cy,
+        mode="lines",
+        name="Círculo Osculador",
+        line=dict(color="#ffd600", width=3),
+        hovertemplate="<b>Círculo Osculador</b><extra></extra>",
+    )
+
+    return [t1, t2, t3, t4, t5, t6]
+
+
+def _build_planar_2d_figure(
+    curve_data: CurveResult, title: str | None = None
+) -> go.Figure:
+    """
+    Construct a pure 2D interactive Plotly figure for planar curves (tau == 0).
+    """
+    s = np.asarray(curve_data.s, dtype=float)
+    N_pts = len(s)
+    r = np.asarray(curve_data.r, dtype=float)
+    T_mat = np.asarray(curve_data.T, dtype=float)
+    N_mat = np.asarray(curve_data.N, dtype=float)
+    kappa = np.asarray(curve_data.kappa, dtype=float)
+    tau = np.asarray(curve_data.tau, dtype=float)
+
+    dx = float(np.ptp(r[0, :]))
+    dy = float(np.ptp(r[1, :]))
+    max_dim = float(max(dx, dy))
+    span = max_dim if max_dim > 1e-4 else 1.0
+    L_vec = float(np.clip(0.15 * span, 0.05, 5.0))
+    L_tan = 2.0 * L_vec
+
+    M_frames = min(N_pts, 200)
+    frame_indices = np.unique(
+        np.round(np.linspace(0, N_pts - 1, M_frames)).astype(int)
+    )
+    M_frames = len(frame_indices)
+
+    dist_matrix = np.abs(frame_indices[:, None] - np.arange(N_pts))
+    closest_frame_idx = np.argmin(dist_matrix, axis=0)
+
+    customdata = [
+        [
+            float(s[j]),
+            int(closest_frame_idx[j]),
+            float(kappa[j]),
+            float(tau[j]),
+        ]
+        for j in range(N_pts)
+    ]
+
+    trace_curve = go.Scatter(
+        x=r[0, :].tolist(),
+        y=r[1, :].tolist(),
+        mode="lines+markers",
+        name="Curva r(s)",
+        line=dict(color="#00e5ff", width=4),
+        marker=dict(size=3, color="#00e5ff"),
+        customdata=customdata,
+        hovertemplate=(
+            "<b>Curva r(s)</b><br>"
+            "s: %{customdata[0]:.3f}<br>"
+            "x: %{x:.3f}<br>"
+            "y: %{y:.3f}<br>"
+            "κ: %{customdata[2]:.3f}<extra></extra>"
+        ),
+    )
+
+    idx0 = int(frame_indices[0])
+    init_apparatus = _build_apparatus_traces_2d(
+        P=r[:, idx0],
+        T=T_mat[:, idx0],
+        N=N_mat[:, idx0],
+        L_vec=L_vec,
+        L_tan=L_tan,
+        k_val=float(kappa[idx0]),
+        span=span,
+        is_initial=True,
+    )
+
+    fig_data = [trace_curve, *init_apparatus]
+
+    frames: list[go.Frame] = []
+    slider_steps: list[dict[str, Any]] = []
+    hud_metrics: list[dict[str, Any]] = []
+
+    for f_idx in range(M_frames):
+        pt_idx = int(frame_indices[f_idx])
+        k_val = float(kappa[pt_idx])
+        rho_val = float(1.0 / abs(k_val)) if abs(k_val) > 1e-5 else None
+
+        hud_metrics.append(
+            {
+                "s": float(s[pt_idx]),
+                "x": float(r[0, pt_idx]),
+                "y": float(r[1, pt_idx]),
+                "z": 0.0,
+                "kappa": k_val,
+                "tau": 0.0,
+                "rho": rho_val,
+                "is_planar": True,
+            }
+        )
+
+        frame_traces = _build_apparatus_traces_2d(
+            P=r[:, pt_idx],
+            T=T_mat[:, pt_idx],
+            N=N_mat[:, pt_idx],
+            L_vec=L_vec,
+            L_tan=L_tan,
+            k_val=k_val,
+            span=span,
+            is_initial=False,
+        )
+
+        frame_name = f"frame_{f_idx}"
+        frames.append(
+            go.Frame(
+                name=frame_name,
+                data=frame_traces,
+                traces=[1, 2, 3, 4, 5, 6],
+            )
+        )
+
+        slider_steps.append(
+            dict(
+                method="animate",
+                args=[
+                    [frame_name],
+                    {
+                        "mode": "immediate",
+                        "frame": {"duration": 0, "redraw": True},
+                        "transition": {"duration": 0},
+                    },
+                ],
+                label=f"{s[pt_idx]:.2f}",
+                value=f_idx,
+            )
+        )
+
+    sliders = [
+        dict(
+            active=0,
+            currentvalue={
+                "prefix": "s = ",
+                "visible": True,
+                "xanchor": "center",
+                "font": {"size": 13, "color": "#38bdf8"},
+            },
+            steps=slider_steps,
+            pad={"b": 10, "t": 20},
+            len=0.88,
+            x=0.06,
+            y=0.03,
+            tickcolor="#64748b",
+            font={"color": "#94a3b8", "size": 10},
+            bgcolor="rgba(15, 23, 42, 0.6)",
+            activebgcolor="#0284c7",
+            bordercolor="rgba(255, 255, 255, 0.1)",
+            borderwidth=1,
+        )
+    ]
+
+    play_pause_menu = dict(
+        type="buttons",
+        direction="left",
+        showactive=False,
+        x=0.06,
+        y=0.10,
+        xanchor="left",
+        yanchor="top",
+        pad={"r": 10, "t": 10},
+        bgcolor="rgba(15, 23, 42, 0.7)",
+        bordercolor="rgba(255, 255, 255, 0.15)",
+        font={"color": "#f1f5f9", "size": 12},
+        buttons=[
+            dict(
+                label="▶ Play",
+                method="animate",
+                args=[
+                    None,
+                    {
+                        "frame": {"duration": 35, "redraw": True},
+                        "fromcurrent": True,
+                        "transition": {"duration": 0},
+                        "mode": "immediate",
+                    },
+                ],
+            ),
+            dict(
+                label="⏸ Pause",
+                method="animate",
+                args=[
+                    [None],
+                    {
+                        "frame": {"duration": 0, "redraw": False},
+                        "mode": "immediate",
+                        "transition": {"duration": 0},
+                    },
+                ],
+            ),
+        ],
+    )
+
+    class_title = _CLASS_DISPLAY_NAMES.get(
+        curve_data.classification,
+        curve_data.classification.replace("_", " ").title(),
+    )
+    final_title = title or f"Teorema Fundamental das Curvas Planas — {class_title} (2D)"
+
+    fig = go.Figure(data=fig_data, frames=frames)
+    fig.update_layout(
+        title=dict(
+            text=final_title,
+            font=dict(color="#f8fafc", size=15),
+            x=0.5,
+            y=0.98,
+            xanchor="center",
+        ),
+        uirevision="constant",
+        xaxis=dict(
+            title="X",
+            color="#94a3b8",
+            gridcolor="rgba(255, 255, 255, 0.1)",
+            zerolinecolor="rgba(255, 255, 255, 0.2)",
+            showgrid=True,
+            zeroline=True,
+        ),
+        yaxis=dict(
+            title="Y",
+            color="#94a3b8",
+            gridcolor="rgba(255, 255, 255, 0.1)",
+            zerolinecolor="rgba(255, 255, 255, 0.2)",
+            showgrid=True,
+            zeroline=True,
+            scaleanchor="x",
+            scaleratio=1,
+        ),
+        paper_bgcolor="#0b0f19",
+        plot_bgcolor="#0b0f19",
+        margin=dict(l=50, r=50, t=50, b=50),
+        legend=dict(
+            x=0.98,
+            y=0.95,
+            xanchor="right",
+            yanchor="top",
+            bgcolor="rgba(15, 23, 42, 0.8)",
+            bordercolor="rgba(255, 255, 255, 0.1)",
+            borderwidth=1,
+            font=dict(color="#f1f5f9", size=11),
+        ),
+        sliders=sliders,
+        updatemenus=[play_pause_menu],
+    )
+
+    fig._curve_result = curve_data  # type: ignore[attr-defined]
+    fig._hud_metrics = hud_metrics  # type: ignore[attr-defined]
+    fig._is_planar = True  # type: ignore[attr-defined]
+
+    return fig
+
+
+def _build_spatial_3d_figure(
     curve_data: CurveResult, title: str | None = None
 ) -> go.Figure:
     """
@@ -681,8 +1060,47 @@ def build_curve_figure(
     # Attach internal metadata for HTML exporter
     fig._curve_result = curve_data  # type: ignore[attr-defined]
     fig._hud_metrics = hud_metrics  # type: ignore[attr-defined]
+    fig._is_planar = False  # type: ignore[attr-defined]
 
     return fig
+
+
+def build_curve_figure(
+    curve_data: CurveResult, title: str | None = None
+) -> go.Figure:
+    """
+    Construct an interactive Plotly figure representing the curve and differential apparatus.
+
+    For planar curves (tau == 0), generates a pure 2D Cartesian figure (go.Scatter) with
+    the complete 2D differential geometry apparatus (trajectory, active point, tangent vector,
+    normal vector, tangent line, normal line, and osculating circle) with equal-aspect axes (1:1).
+
+    For space curves (tau != 0), generates a full 10-trace 3D WebGL figure (go.Scatter3d and
+    go.Mesh3d) with the complete moving Frenet frame {T, N, B}, tangent line, osculating plane,
+    normal plane, rectifying plane, and 3D osculating circle.
+    """
+    s = np.asarray(curve_data.s, dtype=float)
+    N_pts = len(s)
+    if N_pts < 2:
+        raise ValueError("CurveResult must contain at least 2 points.")
+
+    tau = np.asarray(curve_data.tau, dtype=float)
+    is_planar = bool(
+        getattr(curve_data, "is_planar", False)
+        or np.all(np.abs(tau) < 1e-5)
+        or curve_data.classification
+        in (
+            "circulo",
+            "reta",
+            "espiral_de_cornu",
+            "espiral_logaritmica",
+            "curva_plana",
+        )
+    )
+
+    if is_planar:
+        return _build_planar_2d_figure(curve_data, title=title)
+    return _build_spatial_3d_figure(curve_data, title=title)
 
 
 def export_interactive_html(
@@ -692,7 +1110,10 @@ def export_interactive_html(
     include_plotlyjs: bool | str = "cdn",
 ) -> str:
     """
-    Export the interactive 3D curve visualization to a responsive HTML file.
+    Export the interactive curve visualization to a responsive HTML file.
+
+    For planar curves (tau == 0), generates a purely 2D Cartesian interactive view.
+    For space curves (tau != 0), generates a 3D WebGL interactive view.
 
     Injects fullscreen responsive CSS reset (100vw, 100vh, 100dvh, overflow: hidden),
     client-side JavaScript listeners (plotly_click curve snapping, slider tracking,
@@ -711,13 +1132,16 @@ def export_interactive_html(
         fig = curve_data
         curve_res = getattr(fig, "_curve_result", None)
         hud_metrics = getattr(fig, "_hud_metrics", None)
+        is_planar = getattr(fig, "_is_planar", False)
     else:
         curve_res = curve_data
+        is_planar = bool(getattr(curve_res, "is_planar", False))
         fig = build_curve_figure(curve_data, title=title)
         hud_metrics = getattr(fig, "_hud_metrics", None)
 
     # Compute default title and metadata
     if curve_res is not None:
+        is_planar = bool(getattr(curve_res, "is_planar", False)) or getattr(fig, "_is_planar", False)
         class_name = curve_res.classification
         class_label = _CLASS_DISPLAY_NAMES.get(
             class_name, class_name.replace("_", " ").title()
@@ -730,13 +1154,27 @@ def export_interactive_html(
         init_t = float(curve_res.tau[0])
         init_rho = f"{1.0 / abs(init_k):.3f}" if abs(init_k) > 1e-5 else "∞"
     else:
+        is_planar = getattr(fig, "_is_planar", False)
         class_label = "Curva Reconstruída"
         init_s = 0.0
         init_x, init_y, init_z = 0.0, 0.0, 0.0
         init_k, init_t = 0.0, 0.0
         init_rho = "—"
 
-    page_title = title or f"Teorema Fundamental de Curvas — {class_label}"
+    if is_planar:
+        mode_label = "2D"
+        dim_badge_style = "background: rgba(56, 189, 248, 0.2); color: #38bdf8;"
+        init_pos_str = f"({init_x:.2f}, {init_y:.2f})"
+        init_t_str = "0.000 (Plana)"
+        hint_str = "Diedro de Frenet {T, N}, Retas Tangente/Normal e Círculo Osculador — clique na curva ou arraste o controle"
+        page_title = title or f"Teorema Fundamental das Curvas Planas — {class_label} (2D)"
+    else:
+        mode_label = "3D"
+        dim_badge_style = "background: rgba(168, 85, 247, 0.2); color: #c084fc;"
+        init_pos_str = f"({init_x:.2f}, {init_y:.2f}, {init_z:.2f})"
+        init_t_str = f"{init_t:.3f}"
+        hint_str = "Triedro de Frenet {T, N, B}, Planos e Círculo Osculador — clique na curva ou arraste o controle"
+        page_title = title or f"Teorema Fundamental de Curvas — {class_label} (3D)"
 
     # Prepare HUD metrics JSON
     metrics_json = json.dumps(hud_metrics or [])
@@ -754,9 +1192,17 @@ function updateHUDMetrics(idx) {{
   var tElem = document.getElementById("hud-tau");
   var rhoElem = document.getElementById("hud-rho");
   if (sElem) sElem.innerText = m.s.toFixed(3);
-  if (rElem) rElem.innerText = "(" + m.x.toFixed(2) + ", " + m.y.toFixed(2) + ", " + m.z.toFixed(2) + ")";
+  if (rElem) {{
+    if (m.is_planar) {{
+      rElem.innerText = "(" + m.x.toFixed(2) + ", " + m.y.toFixed(2) + ")";
+    }} else {{
+      rElem.innerText = "(" + m.x.toFixed(2) + ", " + m.y.toFixed(2) + ", " + m.z.toFixed(2) + ")";
+    }}
+  }}
   if (kElem) kElem.innerText = m.kappa.toFixed(3);
-  if (tElem) tElem.innerText = m.tau.toFixed(3);
+  if (tElem) {{
+    tElem.innerText = m.is_planar ? "0.000 (Plana)" : m.tau.toFixed(3);
+  }}
   if (rhoElem) rhoElem.innerText = m.rho === null ? "∞" : m.rho.toFixed(3);
 }}
 
@@ -909,13 +1355,13 @@ if (gd) {{
 </head>
 <body>
   <div id="hud-card">
-    <h2>Teorema Fundamental de Curvas <span class="hud-badge" id="hud-class">{class_label}</span></h2>
+    <h2>Teorema Fundamental de Curvas <span class="hud-badge" id="hud-class">{class_label}</span> <span class="hud-badge" style="{dim_badge_style}">{mode_label}</span></h2>
     <div class="hud-row"><span class="hud-label">Comprimento de Arco (s):</span><span class="hud-value" id="hud-s">{init_s:.3f}</span></div>
-    <div class="hud-row"><span class="hud-label">Posição r(s):</span><span class="hud-value" id="hud-r">({init_x:.2f}, {init_y:.2f}, {init_z:.2f})</span></div>
+    <div class="hud-row"><span class="hud-label">Posição r(s):</span><span class="hud-value" id="hud-r">{init_pos_str}</span></div>
     <div class="hud-row"><span class="hud-label">Curvatura κ(s):</span><span class="hud-value" id="hud-kappa">{init_k:.3f}</span></div>
-    <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">{init_t:.3f}</span></div>
+    <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">{init_t_str}</span></div>
     <div class="hud-row"><span class="hud-label">Raio Curvatura ρ(s):</span><span class="hud-value" id="hud-rho">{init_rho}</span></div>
-    <div class="hud-hint">Triedro de Frenet, Planos e Círculo Osculador — clique na curva ou arraste o controle</div>
+    <div class="hud-hint">{hint_str}</div>
   </div>
   <div id="plot-container">
     {plotly_snippet}

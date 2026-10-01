@@ -35,24 +35,23 @@ class TestZeroCurvatureEdgeCases:
         """Verifies build_curve_figure builds cleanly for a straight line with rho = inf."""
         res = curva_engine.reconstruct_curve("0", "0", s0=0.0, s1=10.0, num_points=100)
         assert res.classification == "reta"
+        assert res.is_planar is True
 
         fig = curva_viz.build_curve_figure(res)
         assert fig is not None
 
-        # Trace 9 is Círculo Osculador - must have empty coordinates
-        circle_trace = fig.data[9]
-        assert circle_trace.name == "Círculo Osculador"
+        # Círculo Osculador - must have empty coordinates
+        circle_traces = [t for t in fig.data if t.name == "Círculo Osculador"]
+        assert len(circle_traces) == 1
+        circle_trace = circle_traces[0]
         assert len(circle_trace.x) == 0
         assert len(circle_trace.y) == 0
-        assert len(circle_trace.z) == 0
 
-        # All frames must also have empty circle coordinates for trace 9
+        # All frames must also have empty circle coordinates
         for frame in fig.frames:
-            # frame.data[8] corresponds to trace index 9 (since traces are 1..9)
-            frame_circle = frame.data[8]
+            frame_circle = frame.data[-1]  # last trace in frame is the circle
             assert len(frame_circle.x) == 0
             assert len(frame_circle.y) == 0
-            assert len(frame_circle.z) == 0
 
     def test_straight_line_html_export_and_hud(self, tmp_path):
         """Verifies HTML export for straight line shows infinite curvature radius in HUD and no NaNs."""
@@ -76,38 +75,32 @@ class TestZeroTorsionEdgeCases:
     """Stress tests for planar curves (tau = 0)."""
 
     def test_planar_camera_and_diedro_visibility(self):
-        """Verifies planar curves initialize with top-down camera (XY) and hide out-of-plane traces."""
+        """Verifies planar curves initialize in pure 2D with equal aspect ratio and 2D apparatus."""
         # 1. Circle (planar)
         res_circle = curva_engine.reconstruct_curve("2", "0", s0=0.0, s1=np.pi, num_points=60)
+        assert res_circle.is_planar is True
         fig_circle = curva_viz.build_curve_figure(res_circle)
 
-        scene = fig_circle.layout.scene
-        cam_eye = scene.camera.eye
-        # Initial camera must be top-down for planar curves: eye=(x=0, y=0, z=2.5)
-        assert np.isclose(cam_eye.x, 0.0, atol=1e-6)
-        assert np.isclose(cam_eye.y, 0.0, atol=1e-6)
-        assert np.isclose(cam_eye.z, 2.5, atol=1e-6)
+        # Must be pure 2D Scatter traces
+        assert fig_circle.data[0].type == "scatter"
+        # 2D equal aspect ratio
+        assert fig_circle.layout.yaxis.scaleanchor == "x"
+        assert fig_circle.layout.yaxis.scaleratio == 1
 
-        # Traces out of plane must be in 'legendonly'
-        # Trace 4: Binormal B
-        assert fig_circle.data[4].name == "Vetor Binormal B"
-        assert fig_circle.data[4].visible == "legendonly"
-        # Trace 7: Plano Normal
-        assert fig_circle.data[7].name == "Plano Normal (N, B)"
-        assert fig_circle.data[7].visible == "legendonly"
-        # Trace 8: Plano Retificante
-        assert fig_circle.data[8].name == "Plano Retificante (T, B)"
-        assert fig_circle.data[8].visible == "legendonly"
+        # In-plane 2D traces must be visible
+        trace_names = [t.name for t in fig_circle.data]
+        assert "Curva r(s)" in trace_names
+        assert "Ponto Ativo r(s)" in trace_names
+        assert "Vetor Tangente T" in trace_names
+        assert "Vetor Normal N" in trace_names
+        assert "Reta Tangente L_T" in trace_names
+        assert "Reta Normal L_N" in trace_names
+        assert "Círculo Osculador" in trace_names
 
-        # In-plane traces must be visible (True or None)
-        assert fig_circle.data[2].name == "Vetor Tangente T"
-        assert fig_circle.data[2].visible is not False and fig_circle.data[2].visible != "legendonly"
-        assert fig_circle.data[3].name == "Vetor Normal N"
-        assert fig_circle.data[3].visible is not False and fig_circle.data[3].visible != "legendonly"
-        assert fig_circle.data[6].name == "Plano Osculador (T, N)"
-        assert fig_circle.data[6].visible is not False and fig_circle.data[6].visible != "legendonly"
-        assert fig_circle.data[9].name == "Círculo Osculador"
-        assert fig_circle.data[9].visible is not False and fig_circle.data[9].visible != "legendonly"
+        # 3D out-of-plane traces (Binormal, Plano Normal, Plano Retificante) should not exist in 2D
+        assert "Vetor Binormal B" not in trace_names
+        assert "Plano Normal (N, B)" not in trace_names
+        assert "Plano Retificante (T, B)" not in trace_names
 
     def test_spatial_curve_full_visibility(self):
         """Verifies 3D spatial curves (tau != 0) show all 10 traces and isometric camera."""
@@ -210,11 +203,11 @@ class TestInflectionAndCurvatureZeroCrossings:
         target_f = zero_frames[0]
 
         # The circle in the zero frame must be empty
-        frame_circle = fig.frames[target_f].data[8]
+        frame_circle = fig.frames[target_f].data[-1]
         assert len(frame_circle.x) == 0
 
         # While a frame away from zero (e.g. s=0, kappa=4) must have 65 circle points
-        frame_nonzero = fig.frames[0].data[8]
+        frame_nonzero = fig.frames[0].data[-1]
         assert len(frame_nonzero.x) == 65
 
     def test_tiny_curvature_suppressed_by_span(self):
@@ -224,9 +217,8 @@ class TestInflectionAndCurvatureZeroCrossings:
         fig = curva_viz.build_curve_figure(res)
 
         # Circle trace in initial apparatus must be empty
-        circle_trace = fig.data[9]
+        circle_trace = [t for t in fig.data if t.name == "Círculo Osculador"][0]
         assert len(circle_trace.x) == 0
-
 
 # ==============================================================================
 # 5. OSCULATING CIRCLE EXACT GEOMETRY & CONTACT ORDER
@@ -235,27 +227,22 @@ class TestOsculatingCircleMathematicalExactness:
     """Rigorous differential geometry tests for the osculating circle."""
 
     def test_circle_osculating_circle_exact_coincidence(self):
-        """For a circle of kappa=2, the osculating circle at s=0 must have radius 0.5, center (0, 0.5, 0)."""
+        """For a circle of kappa=2, the osculating circle at s=0 must have radius 0.5, center (0, 0.5)."""
         res = curva_engine.reconstruct_curve("2", "0", s0=0.0, s1=np.pi, num_points=100)
         fig = curva_viz.build_curve_figure(res)
 
-        # Trace 9 is initial osculating circle at s=0
-        circle_trace = fig.data[9]
+        # Initial osculating circle at s=0
+        circle_trace = [t for t in fig.data if t.name == "Círculo Osculador"][0]
         cx = np.array(circle_trace.x)
         cy = np.array(circle_trace.y)
-        cz = np.array(circle_trace.z)
         assert len(cx) == 65
 
-        # All z coordinates must be identically 0
-        assert np.allclose(cz, 0.0, atol=1e-12)
-
-        # Center must be at (0, 0.5, 0)
-        center = np.array([0.0, 0.5, 0.0])
-        dist_to_center = np.sqrt(cx**2 + (cy - 0.5) ** 2 + cz**2)
+        # Center must be at (0, 0.5) in 2D
+        dist_to_center = np.sqrt(cx**2 + (cy - 0.5) ** 2)
         assert np.allclose(dist_to_center, 0.5, atol=1e-12)
 
-        # First point of circle (theta=0) must be exactly active point r(0) = (0, 0, 0)
-        assert np.allclose([cx[0], cy[0], cz[0]], [0.0, 0.0, 0.0], atol=1e-12)
+        # First point of circle (theta=0) must be exactly active point r(0) = (0, 0)
+        assert np.allclose([cx[0], cy[0]], [0.0, 0.0], atol=1e-12)
 
     def test_space_helix_osculating_circle_geometry_and_contact(self):
         """For circular helix kappa=1, tau=1:

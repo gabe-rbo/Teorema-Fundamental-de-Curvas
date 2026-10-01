@@ -284,9 +284,18 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
     # 5. User-friendly summary report
     print("=" * 80)
-    print("  TEOREMA FUNDAMENTAL DE CURVAS — RECONSTRUÇÃO FRENET-SERRET")
+    if curve_data.is_planar:
+        print("  TEOREMA FUNDAMENTAL DAS CURVAS PLANAS — RECONSTRUÇÃO 2D")
+        method_str = "Teorema Fundamental das Curvas Planas (Quadratura 2D)"
+        viz_str = "2D Interativa (Plotly)"
+    else:
+        print("  TEOREMA FUNDAMENTAL DE CURVAS — RECONSTRUÇÃO FRENET-SERRET (3D)")
+        method_str = "Integração Frenet-Serret em R³ (DOP853/RK45 com SO(3))"
+        viz_str = "3D Interativa (Plotly WebGL)"
     print("=" * 80)
     print(f"  Classificação da Curva : {curve_data.classification}")
+    print(f"  Método de Reconstrução : {method_str}")
+    print(f"  Visualização           : {viz_str}")
     print(f"  Curvatura κ(s)         : {args.curvatura}")
     print(f"  Torção τ(s)            : {args.torcao}")
     print(f"  Intervalo [s0, s1]     : [{s0:g}, {s1:g}]")

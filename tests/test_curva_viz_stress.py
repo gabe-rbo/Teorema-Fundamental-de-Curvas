@@ -163,20 +163,18 @@ class TestZeroCurvatureAndEdgeCases:
         res = ce.reconstruct_curve("0", "0", s0=0.0, s1=10.0, num_points=100)
         fig = cv.build_curve_figure(res)
 
-        # Trace 9 is the osculating circle in initial traces
-        circle_trace = fig.data[9]
-        assert circle_trace.name == "Círculo Osculador"
+        # Osculating circle in initial traces
+        circle_traces = [t for t in fig.data if t.name == "Círculo Osculador"]
+        assert len(circle_traces) == 1
+        circle_trace = circle_traces[0]
         assert len(circle_trace.x) == 0
         assert len(circle_trace.y) == 0
-        assert len(circle_trace.z) == 0
 
         # Osculating circle must be suppressed in all animation frames
         for frame in fig.frames:
-            # In frame.data, traces are 1..9, so index 8 is Trace 9
-            frame_circle = frame.data[8]
+            frame_circle = frame.data[-1]
             assert len(frame_circle.x) == 0
             assert len(frame_circle.y) == 0
-            assert len(frame_circle.z) == 0
 
         out_html = tmp_path / "straight_line.html"
         cv.export_interactive_html(res, str(out_html))
@@ -189,14 +187,14 @@ class TestZeroCurvatureAndEdgeCases:
         fig = cv.build_curve_figure(res)
 
         # Frame 0 is s=0, kappa=0 -> circle suppressed
-        frame0_circle = fig.frames[0].data[8]
+        frame0_circle = fig.frames[0].data[-1]
         assert len(frame0_circle.x) == 0
 
         # Later frame where kappa is substantial and rho <= 10*span -> circle populated
         # Find a frame where circle is rendered
         rendered_count = 0
         for frame in fig.frames:
-            if len(frame.data[8].x) > 0:
+            if len(frame.data[-1].x) > 0:
                 rendered_count += 1
         assert rendered_count > 0, "Osculating circle was never rendered for Clothoid at s>0"
 
@@ -311,28 +309,23 @@ class TestDifferentialApparatusAndGeometry:
             assert len(frame.data) == 9
 
     def test_planar_curve_camera_and_visibility(self):
-        """Verify planar curves (tau=0) hide out-of-plane elements in legendonly and set top-down camera."""
+        """Verify planar curves (tau=0) are rendered in pure 2D with equal aspect ratio and 2D apparatus."""
         res = ce.reconstruct_curve("1", "0", s0=0.0, s1=6.28, num_points=50)
         fig = cv.build_curve_figure(res)
 
-        # In planar curve:
-        # Trace 4: Vetor Binormal B -> legendonly
-        assert fig.data[4].visible == "legendonly"
-        # Trace 7: Plano Normal -> legendonly
-        assert fig.data[7].visible == "legendonly"
-        # Trace 8: Plano Retificante -> legendonly
-        assert fig.data[8].visible == "legendonly"
+        # Planar curve is pure 2D Scatter
+        assert fig.data[0].type == "scatter"
+        assert fig.layout.yaxis.scaleanchor == "x"
+        assert fig.layout.yaxis.scaleratio == 1
 
-        # Trace 2: Tangent -> visible
-        assert fig.data[2].visible is not False and fig.data[2].visible != "legendonly"
-        # Trace 3: Normal -> visible
-        assert fig.data[3].visible is not False and fig.data[3].visible != "legendonly"
-        # Trace 6: Plano Osculador -> visible
-        assert fig.data[6].visible is not False and fig.data[6].visible != "legendonly"
-
-        # Top-down camera (XY plane)
-        camera_eye = fig.layout.scene.camera.eye
-        assert camera_eye.x == 0 and camera_eye.y == 0 and camera_eye.z == 2.5
+        trace_names = [t.name for t in fig.data]
+        assert "Curva r(s)" in trace_names
+        assert "Vetor Tangente T" in trace_names
+        assert "Vetor Normal N" in trace_names
+        assert "Reta Tangente L_T" in trace_names
+        assert "Reta Normal L_N" in trace_names
+        assert "Círculo Osculador" in trace_names
+        assert "Vetor Binormal B" not in trace_names
 
     def test_planes_geometric_orthogonality(self):
         """Verify quad vertices for osculating, normal, and rectifying planes satisfy normal equations."""

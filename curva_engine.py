@@ -252,6 +252,21 @@ class CurveResult:
     s0: float
     s1: float
 
+    @property
+    def is_planar(self) -> bool:
+        """Indicate whether the curve is planar (tau identically zero)."""
+        return bool(
+            np.all(np.abs(self.tau) < 1e-9)
+            or self.classification
+            in (
+                "circulo",
+                "reta",
+                "espiral_de_cornu",
+                "espiral_logaritmica",
+                "curva_plana",
+            )
+        )
+
 
 # ---------------------------------------------------------------------------
 # SO(3) Frame Orthonormalization
@@ -432,6 +447,95 @@ def classify_curve(
 
 
 # ---------------------------------------------------------------------------
+# Fundamental Theorem of Plane Curves (Quadrature Engine for tau == 0)
+# ---------------------------------------------------------------------------
+
+
+def reconstruct_plane_curve(
+    kappa_eval: Callable[[np.ndarray | float], np.ndarray | float],
+    s0: float,
+    s1: float,
+    s_vals: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Reconstruct a planar curve in R^2 directly via the Fundamental Theorem of Plane Curves
+    (Teorema Fundamental das Curvas Planas).
+
+    For plane curves with tau(s) == 0, the Frenet-Serret system reduces to direct quadratures:
+        theta(s) = theta_0 + int_{s0}^s kappa(u) du  (with canonical theta_0 = 0)
+        T(s) = (cos(theta(s)), sin(theta(s)), 0)
+        N(s) = (-sin(theta(s)), cos(theta(s)), 0)
+        B(s) = (0, 0, 1)
+
+    The trajectory is obtained by direct quadrature of the tangent vector:
+        x(s) = x_0 + int_{s0}^s cos(theta(u)) du  (with x_0 = 0)
+        y(s) = y_0 + int_{s0}^s sin(theta(u)) du  (with y_0 = 0)
+        z(s) = 0
+
+    This avoids solving coupled 12-state ODE systems, achieving machine-precision orthonormality
+    (||T|| = ||N|| = 1, T . N = 0) and superior numerical speed and stability.
+    """
+    s0_f = float(s0)
+    s1_f = float(s1)
+    N_pts = len(s_vals)
+
+    # Use a high-density grid for high-precision Simpson quadrature
+    dense_n = max(N_pts * 8, 4001)
+    s_dense = np.linspace(s0_f, s1_f, dense_n)
+
+    k_dense = np.asarray(kappa_eval(s_dense), dtype=float)
+    k_dense = np.maximum(k_dense, 0.0)
+
+    try:
+        from scipy.integrate import cumulative_simpson
+        theta_dense = cumulative_simpson(k_dense, x=s_dense, initial=0.0)
+        cos_dense = np.cos(theta_dense)
+        sin_dense = np.sin(theta_dense)
+        x_dense = cumulative_simpson(cos_dense, x=s_dense, initial=0.0)
+        y_dense = cumulative_simpson(sin_dense, x=s_dense, initial=0.0)
+    except Exception:
+        from scipy.integrate import cumulative_trapezoid
+        theta_dense = cumulative_trapezoid(k_dense, s_dense, initial=0.0)
+        cos_dense = np.cos(theta_dense)
+        sin_dense = np.sin(theta_dense)
+        x_dense = cumulative_trapezoid(cos_dense, s_dense, initial=0.0)
+        y_dense = cumulative_trapezoid(sin_dense, s_dense, initial=0.0)
+
+    # Interpolate smoothly to target discretization grid s_vals via CubicSpline
+    from scipy.interpolate import CubicSpline
+    cs_theta = CubicSpline(s_dense, theta_dense)
+    cs_x = CubicSpline(s_dense, x_dense)
+    cs_y = CubicSpline(s_dense, y_dense)
+
+    theta_vals = cs_theta(s_vals)
+    theta_vals[0] = 0.0
+    x_vals = cs_x(s_vals)
+    x_vals[0] = 0.0
+    y_vals = cs_y(s_vals)
+    y_vals[0] = 0.0
+
+    r = np.zeros((3, N_pts), dtype=float)
+    r[0, :] = x_vals
+    r[1, :] = y_vals
+    r[2, :] = 0.0
+
+    T = np.zeros((3, N_pts), dtype=float)
+    T[0, :] = np.cos(theta_vals)
+    T[1, :] = np.sin(theta_vals)
+    T[2, :] = 0.0
+
+    N = np.zeros((3, N_pts), dtype=float)
+    N[0, :] = -np.sin(theta_vals)
+    N[1, :] = np.cos(theta_vals)
+    N[2, :] = 0.0
+
+    B = np.zeros((3, N_pts), dtype=float)
+    B[2, :] = 1.0
+
+    return r, T, N, B
+
+
+# ---------------------------------------------------------------------------
 # Frenet-Serret ODE Integration
 # ---------------------------------------------------------------------------
 
@@ -445,18 +549,15 @@ def reconstruct_curve(
 ) -> CurveResult:
     """
     Reconstruct space curve r(s) and moving orthonormal frame [T(s), N(s), B(s)]
-    from curvature kappa(s) and torsion tau(s) via Frenet-Serret ODEs:
+    from curvature kappa(s) and torsion tau(s).
 
-        dr/ds = T
-        dT/ds = kappa(s) * N
-        dN/ds = -kappa(s) * T + tau(s) * B
-        dB/ds = -tau(s) * N
+    For planar curves (tau == 0), reconstruction is performed directly using the
+    Fundamental Theorem of Plane Curves via high-precision quadratures, bypassing
+    ODE integration completely.
 
-    Subject to initial conditions at s0:
-        r(s0) = (0, 0, 0)
-        T(s0) = (1, 0, 0)
-        N(s0) = (0, 1, 0)
-        B(s0) = (0, 0, 1)
+    For space curves (tau != 0), the coupled 12-state Frenet-Serret ODE system is
+    solved in R^3 via SciPy (DOP853/RK45) with Modified Gram-Schmidt SO(3) frame
+    re-orthonormalization safeguards.
 
     Args:
         kappa_expr_str: Mathematical expression for curvature kappa(s) >= 0.
@@ -557,76 +658,77 @@ def reconstruct_curve(
 
     kappa_vals = np.maximum(kappa_vals, 0.0)
 
-    # 5. Formulate 12-state Frenet-Serret ODE system
-    step_count = 0
-    max_steps = 100_000
-
-    def frenet_system(s: float, Y: np.ndarray) -> np.ndarray:
-        nonlocal step_count
-        step_count += 1
-        if step_count > max_steps:
-            raise ValueError(
-                "Expression evaluates to non-finite values (singularity / div by zero or solver collapse)."
-            )
-
-        try:
-            k_raw = float(kappa_eval(s))
-            t_raw = float(tau_eval(s))
-        except (ZeroDivisionError, FloatingPointError, OverflowError):
-            raise ValueError(
-                "Expression evaluates to non-finite values (singularity / div by zero)."
-            )
-
-        if not np.isfinite(k_raw) or not np.isfinite(t_raw) or abs(k_raw) > 1e10 or abs(t_raw) > 1e10:
-            raise ValueError(
-                "Expression evaluates to non-finite values (singularity / div by zero)."
-            )
-
-        k = max(0.0, k_raw)
-        t = t_raw
-
-        # Y: [x, y, z, Tx, Ty, Tz, Nx, Ny, Nz, Bx, By, Bz]
-        T_vec = Y[3:6]
-        N_vec = Y[6:9]
-        B_vec = Y[9:12]
-
-        dr = T_vec
-        dT = k * N_vec
-        dN = -k * T_vec + t * B_vec
-        dB = -t * N_vec
-
-        return np.concatenate([dr, dT, dN, dB])
-
-    # Initial state: r=(0,0,0), T=(1,0,0), N=(0,1,0), B=(0,0,1)
-    Y0 = np.array(
-        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-        dtype=float,
+    # 5. Check if curve is planar (tau == 0 identically)
+    is_tau_zero = (
+        tau_expr.is_zero
+        or sp.simplify(tau_expr) == 0
+        or bool(np.all(np.abs(tau_vals) < 1e-9))
     )
 
-    # 6. Solve IVP with high-order Runge-Kutta
-    try:
-        sol = solve_ivp(
-            frenet_system,
-            (s0_f, s1_f),
-            Y0,
-            t_eval=s_vals,
-            method="DOP853",
-            rtol=1e-9,
-            atol=1e-9,
+    if is_tau_zero:
+        # Reconstruct purely via Fundamental Theorem of Plane Curves
+        # (Teorema Fundamental das Curvas Planas) without solving 12-state ODEs
+        r, T_ortho, N_ortho, B_ortho = reconstruct_plane_curve(
+            kappa_eval=kappa_eval,
+            s0=s0_f,
+            s1=s1_f,
+            s_vals=s_vals,
         )
-    except ValueError:
-        raise
-    except Exception:
-        sol = None
+    else:
+        # 6. Formulate 12-state Frenet-Serret ODE system in R^3
+        step_count = 0
+        max_steps = 100_000
 
-    if sol is None or not sol.success:
+        def frenet_system(s: float, Y: np.ndarray) -> np.ndarray:
+            nonlocal step_count
+            step_count += 1
+            if step_count > max_steps:
+                raise ValueError(
+                    "Expression evaluates to non-finite values (singularity / div by zero or solver collapse)."
+                )
+
+            try:
+                k_raw = float(kappa_eval(s))
+                t_raw = float(tau_eval(s))
+            except (ZeroDivisionError, FloatingPointError, OverflowError):
+                raise ValueError(
+                    "Expression evaluates to non-finite values (singularity / div by zero)."
+                )
+
+            if not np.isfinite(k_raw) or not np.isfinite(t_raw) or abs(k_raw) > 1e10 or abs(t_raw) > 1e10:
+                raise ValueError(
+                    "Expression evaluates to non-finite values (singularity / div by zero)."
+                )
+
+            k = max(0.0, k_raw)
+            t = t_raw
+
+            # Y: [x, y, z, Tx, Ty, Tz, Nx, Ny, Nz, Bx, By, Bz]
+            T_vec = Y[3:6]
+            N_vec = Y[6:9]
+            B_vec = Y[9:12]
+
+            dr = T_vec
+            dT = k * N_vec
+            dN = -k * T_vec + t * B_vec
+            dB = -t * N_vec
+
+            return np.concatenate([dr, dT, dN, dB])
+
+        # Initial state: r=(0,0,0), T=(1,0,0), N=(0,1,0), B=(0,0,1)
+        Y0 = np.array(
+            [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            dtype=float,
+        )
+
+        # Solve IVP with high-order Runge-Kutta
         try:
             sol = solve_ivp(
                 frenet_system,
                 (s0_f, s1_f),
                 Y0,
                 t_eval=s_vals,
-                method="RK45",
+                method="DOP853",
                 rtol=1e-9,
                 atol=1e-9,
             )
@@ -635,19 +737,35 @@ def reconstruct_curve(
         except Exception:
             sol = None
 
-    if sol is None or not sol.success:
-        raise RuntimeError(f"ODE integration failed: {sol.message if sol else 'Unknown solver error'}")
+        if sol is None or not sol.success:
+            try:
+                sol = solve_ivp(
+                    frenet_system,
+                    (s0_f, s1_f),
+                    Y0,
+                    t_eval=s_vals,
+                    method="RK45",
+                    rtol=1e-9,
+                    atol=1e-9,
+                )
+            except ValueError:
+                raise
+            except Exception:
+                sol = None
 
-    # 7. Extract state matrices
-    r = sol.y[0:3, :]
-    T_raw = sol.y[3:6, :]
-    N_raw = sol.y[6:9, :]
-    B_raw = sol.y[9:12, :]
+        if sol is None or not sol.success:
+            raise RuntimeError(f"ODE integration failed: {sol.message if sol else 'Unknown solver error'}")
 
-    # 8. Vectorized Modified Gram-Schmidt SO(3) orthonormalization
-    T_ortho, N_ortho, B_ortho = orthonormalize_frame(T_raw, N_raw, B_raw)
+        # Extract state matrices
+        r = sol.y[0:3, :]
+        T_raw = sol.y[3:6, :]
+        N_raw = sol.y[6:9, :]
+        B_raw = sol.y[9:12, :]
 
-    # 9. Classify curve
+        # Vectorized Modified Gram-Schmidt SO(3) orthonormalization
+        T_ortho, N_ortho, B_ortho = orthonormalize_frame(T_raw, N_raw, B_raw)
+
+    # Classify curve
     classification = classify_curve(kappa_expr, tau_expr, s_vals, kappa_vals, tau_vals)
 
     return CurveResult(
