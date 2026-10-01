@@ -251,6 +251,8 @@ class CurveResult:
     classification: str
     s0: float
     s1: float
+    kappa_expr: str = ""
+    tau_expr: str = ""
 
     @property
     def is_planar(self) -> bool:
@@ -779,6 +781,8 @@ def reconstruct_curve(
         classification=classification,
         s0=s0_f,
         s1=s1_f,
+        kappa_expr=str(kappa_expr),
+        tau_expr=str(tau_expr),
     )
 
 

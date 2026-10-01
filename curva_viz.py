@@ -539,6 +539,19 @@ def _build_planar_2d_figure(
         k_val = float(kappa[pt_idx])
         rho_val = float(1.0 / abs(k_val)) if abs(k_val) > 1e-5 else None
 
+        # Evolute E(s) = r(s) + (1/kappa) * N(s)
+        if abs(k_val) > 1e-5:
+            Ex_val = float(r[0, pt_idx] + (1.0 / k_val) * N_mat[0, pt_idx])
+            Ey_val = float(r[1, pt_idx] + (1.0 / k_val) * N_mat[1, pt_idx])
+        else:
+            Ex_val = None
+            Ey_val = None
+
+        # Involute I(s) = r(s) + (s1 - s) * T(s)
+        s_rem = float(s[-1] - s[pt_idx])
+        Ix_val = float(r[0, pt_idx] + s_rem * T_mat[0, pt_idx])
+        Iy_val = float(r[1, pt_idx] + s_rem * T_mat[1, pt_idx])
+
         hud_metrics.append(
             {
                 "s": float(s[pt_idx]),
@@ -548,6 +561,7 @@ def _build_planar_2d_figure(
                 "kappa": k_val,
                 "tau": 0.0,
                 "rho": rho_val,
+                "sigma": None,
                 "is_planar": True,
                 "Tx": float(T_mat[0, pt_idx]),
                 "Ty": float(T_mat[1, pt_idx]),
@@ -558,6 +572,12 @@ def _build_planar_2d_figure(
                 "Bx": 0.0,
                 "By": 0.0,
                 "Bz": 1.0,
+                "Ex": Ex_val,
+                "Ey": Ey_val,
+                "Ez": 0.0,
+                "Ix": Ix_val,
+                "Iy": Iy_val,
+                "Iz": 0.0,
             }
         )
 
@@ -877,6 +897,23 @@ def _build_spatial_3d_figure(
         k_val = float(kappa[pt_idx])
         t_val = float(tau[pt_idx])
         rho_val = float(1.0 / abs(k_val)) if abs(k_val) > 1e-5 else None
+        sigma_val = float(1.0 / abs(t_val)) if abs(t_val) > 1e-5 else None
+
+        # Evolute E(s) = r(s) + (1/kappa) * N(s)
+        if abs(k_val) > 1e-5:
+            Ex_val = float(r[0, pt_idx] + (1.0 / k_val) * N_mat[0, pt_idx])
+            Ey_val = float(r[1, pt_idx] + (1.0 / k_val) * N_mat[1, pt_idx])
+            Ez_val = float(r[2, pt_idx] + (1.0 / k_val) * N_mat[2, pt_idx])
+        else:
+            Ex_val = None
+            Ey_val = None
+            Ez_val = None
+
+        # Involute I(s) = r(s) + (s1 - s) * T(s)
+        s_rem = float(s[-1] - s[pt_idx])
+        Ix_val = float(r[0, pt_idx] + s_rem * T_mat[0, pt_idx])
+        Iy_val = float(r[1, pt_idx] + s_rem * T_mat[1, pt_idx])
+        Iz_val = float(r[2, pt_idx] + s_rem * T_mat[2, pt_idx])
 
         # Collect HUD metrics
         hud_metrics.append(
@@ -888,6 +925,7 @@ def _build_spatial_3d_figure(
                 "kappa": k_val,
                 "tau": t_val,
                 "rho": rho_val,
+                "sigma": sigma_val,
                 "is_planar": is_planar,
                 "Tx": float(T_mat[0, pt_idx]),
                 "Ty": float(T_mat[1, pt_idx]),
@@ -898,6 +936,12 @@ def _build_spatial_3d_figure(
                 "Bx": float(B_mat[0, pt_idx]),
                 "By": float(B_mat[1, pt_idx]),
                 "Bz": float(B_mat[2, pt_idx]),
+                "Ex": Ex_val,
+                "Ey": Ey_val,
+                "Ez": Ez_val,
+                "Ix": Ix_val,
+                "Iy": Iy_val,
+                "Iz": Iz_val,
             }
         )
 
@@ -1207,6 +1251,126 @@ def build_curve_figure(
     return _build_spatial_3d_figure(curve_data, title=title)
 
 
+def _build_curve_formulas(
+    curve_res: CurveResult | None, is_planar: bool
+) -> dict[str, str]:
+    """
+    Construct LaTeX formulas and descriptions for the curve r(s), Frenet frame
+    {T, N, B}, evolute E(s), involute I(s), and differential geometric properties
+    based on the Fundamental Theorem of Curves and the curve classification.
+    """
+    cls = getattr(curve_res, "classification", "") if curve_res else ""
+    kappa_expr = getattr(curve_res, "kappa_expr", "1") if curve_res else "1"
+    tau_expr = getattr(curve_res, "tau_expr", "0") if curve_res else "0"
+    s0 = float(getattr(curve_res, "s0", 0.0)) if curve_res else 0.0
+    s1 = float(getattr(curve_res, "s1", 6.28)) if curve_res else 6.28
+
+    if cls == "circulo":
+        return {
+            "curve_r": r"r(s) = \left( \frac{\sin(\kappa s)}{\kappa},\, \frac{1 - \cos(\kappa s)}{\kappa} \right)",
+            "curve_desc": r"Círculo euclidiano no plano $\mathbb{R}^2$ de raio constante $R = 1/\kappa$.",
+            "vec_t": r"T(s) = \left( \cos(\kappa s),\, \sin(\kappa s) \right) = \frac{dr}{ds}",
+            "vec_n": r"N(s) = \left( -\sin(\kappa s),\, \cos(\kappa s) \right) = J \cdot T(s)",
+            "vec_b": "",
+            "evolute": r"E(s) = \left( 0,\, \frac{1}{\kappa} \right)",
+            "evolute_desc": r"A evoluta colapsa em um ponto fixo: o centro de curvatura da circunferência.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"Evolvente da circunferência gerada pelo desenrolamento de corda a partir de $s_1$.",
+            "radii": r"\rho(s) = \frac{1}{\kappa} = R, \quad \sigma(s) = \infty",
+        }
+    elif cls == "reta":
+        return {
+            "curve_r": r"r(s) = r(s_0) + s\,T_0",
+            "curve_desc": r"Reta euclidiana gerada por curvatura identicamente nula ($\kappa \equiv 0$).",
+            "vec_t": r"T(s) = T_0 = \text{const}",
+            "vec_n": r"N(s) = N_0 = \text{const}",
+            "vec_b": r"B(s) = B_0 = \text{const}" if not is_planar else "",
+            "evolute": r"E(s) \to \infty",
+            "evolute_desc": r"Para retas ($\kappa = 0$), o raio de curvatura é infinito e a evoluta é imprópria.",
+            "involute": r"I(s) = r(s_1) = \text{const}",
+            "involute_desc": r"A involuta da reta colapsa na extremidade final $r(s_1)$.",
+            "radii": r"\rho(s) = \infty" + (r", \quad \sigma(s) = \infty" if not is_planar else ""),
+        }
+    elif cls == "helice_circular":
+        return {
+            "curve_r": r"r(s) = \left( \frac{\kappa}{\omega^2}\big(1 - \cos(\omega s)\big),\, \frac{\kappa}{\omega^2}\sin(\omega s),\, \frac{\tau}{\omega} s \right)",
+            "curve_desc": r"Hélice circular enrolada sobre cilindro de raio $R = \frac{\kappa}{\kappa^2 + \tau^2}$ e passo $P = \frac{2\pi\tau}{\kappa^2 + \tau^2}$, com $\omega = \sqrt{\kappa^2 + \tau^2}$.",
+            "vec_t": r"T(s) = \left( \frac{\kappa}{\omega}\sin(\omega s),\, \frac{\kappa}{\omega}\cos(\omega s),\, \frac{\tau}{\omega} \right)",
+            "vec_n": r"N(s) = \left( \cos(\omega s),\, -\sin(\omega s),\, 0 \right)",
+            "vec_b": r"B(s) = \left( \frac{\tau}{\omega}\sin(\omega s),\, \frac{\tau}{\omega}\cos(\omega s),\, -\frac{\kappa}{\omega} \right)",
+            "evolute": r"E(s) = r(s) + \frac{1}{\kappa} N(s)",
+            "evolute_desc": r"Evoluta da hélice é outra hélice circular coaxial com raio $R_E = \frac{\tau^2}{\kappa(\kappa^2 + \tau^2)}$.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"Involuta (evolvente) gerada pelo desenrolamento da curva espacial a partir de $s_1$.",
+            "radii": r"\rho = \frac{1}{\kappa}, \quad \sigma = \frac{1}{\tau} \quad (\text{constantes})",
+        }
+    elif cls == "helice_cilindrica_geral":
+        return {
+            "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s T(u)\,du",
+            "curve_desc": r"Hélice cilíndrica geral satisfazendo o Teorema de Lancret: $\frac{\tau(s)}{\kappa(s)} = c = \text{const} \iff$ reta tangente forma ângulo constante com geratriz fixa.",
+            "vec_t": r"T'(s) = \kappa(s) N(s), \quad \langle T(s), u_0 \rangle = \cos\alpha",
+            "vec_n": r"N(s) = \frac{T'(s)}{\kappa(s)} = \frac{1}{\kappa(s)} \frac{dT}{ds}",
+            "vec_b": r"B(s) = T(s) \times N(s)",
+            "evolute": r"E(s) = r(s) + \frac{1}{\kappa(s)} N(s)",
+            "evolute_desc": r"Locus dos centros dos círculos osculadores no espaço.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"Involuta espacial cujas retas tangentes a $r(s)$ são normais a $I(s)$.",
+            "radii": r"\rho(s) = \frac{1}{|\kappa(s)|}, \quad \sigma(s) = \frac{1}{|\tau(s)|}, \quad \frac{\sigma}{\rho} = \text{const}",
+        }
+    elif cls == "espiral_de_cornu":
+        return {
+            "curve_r": r"r(s) = \left( \int_0^s \cos\left(\frac{c u^2}{2}\right)du,\, \int_0^s \sin\left(\frac{c u^2}{2}\right)du \right)",
+            "curve_desc": r"Clotoide (Espiral de Cornu) com $\kappa(s) = c \cdot s$. O ângulo de direção cresce quadraticamente: $\theta(s) = \frac{c s^2}{2}$.",
+            "vec_t": r"T(s) = \left( \cos\left(\frac{c s^2}{2}\right),\, \sin\left(\frac{c s^2}{2}\right) \right)",
+            "vec_n": r"N(s) = \left( -\sin\left(\frac{c s^2}{2}\right),\, \cos\left(\frac{c s^2}{2}\right) \right)",
+            "vec_b": "",
+            "evolute": r"E(s) = r(s) + \frac{1}{c\,s} N(s)",
+            "evolute_desc": r"A evoluta da clotoide é o envelope das normais com raio $\rho(s) = \frac{1}{c\,s}$.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"Involuta (evolvente) gerada pelo desenrolamento a partir de $s_1$.",
+            "radii": r"\rho(s) = \frac{1}{|c \cdot s|}, \quad \sigma(s) = \infty",
+        }
+    elif cls == "espiral_logaritmica":
+        return {
+            "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s (\cos\theta(u),\, \sin\theta(u))\,du",
+            "curve_desc": r"Espiral Logarítmica com $\kappa(s) = \frac{1}{a s + b}$ e raio $\rho(s) = |a s + b|$. Ângulo constante com o raio vetor.",
+            "vec_t": r"T(s) = \left( \cos\theta(s),\, \sin\theta(s) \right), \quad \theta(s) = \int \kappa\,du",
+            "vec_n": r"N(s) = \left( -\sin\theta(s),\, \cos\theta(s) \right)",
+            "vec_b": "",
+            "evolute": r"E(s) = r(s) + (a s + b) N(s)",
+            "evolute_desc": r"A evoluta de uma espiral logarítmica é outra espiral logarítmica congruente.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"A involuta da espiral logarítmica também é uma espiral logarítmica congruente.",
+            "radii": r"\rho(s) = |a s + b|, \quad \sigma(s) = \infty",
+        }
+    elif is_planar:
+        return {
+            "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s (\cos\theta(u),\, \sin\theta(u))\,du",
+            "curve_desc": r"Curva plana integrada pelo Teorema Fundamental das Curvas Planas via ângulo de direção $\theta(s) = \int_{s_0}^s \kappa(u)\,du$.",
+            "vec_t": r"T(s) = \left( \cos\theta(s),\, \sin\theta(s) \right) = \frac{dr}{ds}",
+            "vec_n": r"N(s) = \left( -\sin\theta(s),\, \cos\theta(s) \right) = J \cdot T(s)",
+            "vec_b": "",
+            "evolute": r"E(s) = r(s) + \frac{1}{\kappa(s)} N(s)",
+            "evolute_desc": r"Evoluta: locus dos centros de curvatura e envelope de todas as retas normais.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"Involuta (evolvente): trajetória da extremidade de corda desenrolada a partir de $s_1$.",
+            "radii": r"\rho(s) = \frac{1}{|\kappa(s)|}, \quad \sigma(s) = \infty",
+        }
+    else:
+        return {
+            "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s T(u)\,du",
+            "curve_desc": r"Curva espacial $\mathbb{R}^3$ reconstruída pelo Teorema Fundamental integrando o sistema de Frenet-Serret em $\mathrm{SO}(3)$.",
+            "vec_t": r"\frac{dT}{ds} = \kappa(s) N(s), \quad T(s) = \frac{dr}{ds}",
+            "vec_n": r"\frac{dN}{ds} = -\kappa(s) T(s) + \tau(s) B(s)",
+            "vec_b": r"\frac{dB}{ds} = -\tau(s) N(s), \quad B(s) = T(s) \times N(s)",
+            "evolute": r"E(s) = r(s) + \frac{1}{\kappa(s)} N(s)",
+            "evolute_desc": r"Evoluta espacial: linha dos centros dos círculos osculadores no espaço tridimensional.",
+            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+            "involute_desc": r"Involuta espacial cujas retas tangentes a $r(s)$ são normais a $I(s)$.",
+            "radii": r"\rho(s) = \frac{1}{|\kappa(s)|}, \quad \sigma(s) = \frac{1}{|\tau(s)|}",
+        }
+
+
 def export_interactive_html(
     curve_data: CurveResult | go.Figure,
     output_path: str,
@@ -1307,6 +1471,74 @@ def export_interactive_html(
             init_by = float(curve_res.B[1, 0])
             init_bz = float(curve_res.B[2, 0])
 
+    init_ex = None
+    init_ey = None
+    init_ez = None
+    init_ix = None
+    init_iy = None
+    init_iz = None
+    init_sigma_str = "∞"
+
+    if hud_metrics and len(hud_metrics) > 0:
+        m0 = hud_metrics[0]
+        init_ex = m0.get("Ex")
+        init_ey = m0.get("Ey")
+        init_ez = m0.get("Ez")
+        init_ix = m0.get("Ix")
+        init_iy = m0.get("Iy")
+        init_iz = m0.get("Iz")
+        sig_val = m0.get("sigma")
+        if sig_val is not None:
+            init_sigma_str = f"{sig_val:.3f}"
+        elif not is_planar and abs(init_t) > 1e-5:
+            init_sigma_str = f"{1.0 / abs(init_t):.3f}"
+        else:
+            init_sigma_str = "∞"
+    else:
+        if abs(init_k) > 1e-5:
+            init_ex = init_x + (1.0 / init_k) * init_nx
+            init_ey = init_y + (1.0 / init_k) * init_ny
+            init_ez = init_z + (1.0 / init_k) * init_nz
+        s_rem0 = s1 - s0
+        init_ix = init_x + s_rem0 * init_tx
+        init_iy = init_y + s_rem0 * init_ty
+        init_iz = init_z + s_rem0 * init_tz
+        if not is_planar and abs(init_t) > 1e-5:
+            init_sigma_str = f"{1.0 / abs(init_t):.3f}"
+        else:
+            init_sigma_str = "∞"
+
+    if init_ex is not None and init_ey is not None:
+        init_evo_str = (
+            f"({init_ex:.2f}, {init_ey:.2f})"
+            if is_planar
+            else f"({init_ex:.2f}, {init_ey:.2f}, {init_ez:.2f})"
+        )
+    else:
+        init_evo_str = "∞ (κ ≈ 0)"
+
+    if init_ix is not None and init_iy is not None:
+        init_inv_str = (
+            f"({init_ix:.2f}, {init_iy:.2f})"
+            if is_planar
+            else f"({init_ix:.2f}, {init_iy:.2f}, {init_iz:.2f})"
+        )
+    else:
+        init_inv_str = "—"
+
+    formulas = _build_curve_formulas(curve_res, is_planar)
+
+    binormal_formula_html = ""
+    sigma_hud_row = ""
+    if not is_planar:
+        binormal_formula_html = f"""
+            <div class="formula-row">
+              <div class="formula-title"><span>Vetor Binormal</span> <span class="formula-badge badge-b">B(s)</span></div>
+              <div class="formula-math" id="math-vec-b">${formulas["vec_b"]}$</div>
+            </div>
+        """
+        sigma_hud_row = f'<div class="hud-row"><span class="hud-label">Raio Torção σ(s):</span><span class="hud-value" id="hud-sigma">{init_sigma_str}</span></div>'
+
     if is_planar:
         vec_html = f"""
         <div class="vec-item"><span class="vec-tag vec-t">T</span><span class="vec-val" id="hud-vec-t">[{init_tx:.3f}, {init_ty:.3f}]</span></div>
@@ -1322,10 +1554,10 @@ def export_interactive_html(
             ("Círculo Osculador", COLOR_CIRCLE, 6, True),
         ]
         theory_summary = (
-            "Pelo <b>Teorema Fundamental das Curvas Planas</b>, a curvatura com sinal "
-            "\\(\\kappa(s)\\) determina a curva de modo único a menos de rotações e translações "
-            "no plano \\(\\mathbb{R}^2\\). A reconstrução é calculada diretamente pelo ângulo "
-            "tangente \\(\\theta(s) = \\int_{s_0}^s \\kappa(u)\\,du\\) via quadratura direta."
+            r"Pelo <b>Teorema Fundamental das Curvas Planas</b>, a curvatura com sinal "
+            r"$\kappa(s)$ determina a curva de modo único a menos de rotações e translações "
+            r"no plano $\mathbb{R}^2$. A reconstrução é calculada diretamente pelo ângulo "
+            r"tangente $\theta(s) = \int_{s_0}^s \kappa(u)\,du$ via quadratura direta."
         )
     else:
         vec_html = f"""
@@ -1346,10 +1578,10 @@ def export_interactive_html(
             ("Círculo Osculador", COLOR_CIRCLE, 9, True),
         ]
         theory_summary = (
-            "Pelo <b>Teorema Fundamental das Curvas no \\(\\mathbb{R}^3\\)</b>, funções de curvatura "
-            "\\(\\kappa(s) > 0\\) e torção \\(\\tau(s)\\) determinam a curva de modo único a menos "
-            "de movimentos rígidos euclidianos (\\(\\mathrm{SE}(3)\\)). A solução é integrada a partir "
-            "do sistema diferencial linear de Frenet-Serret em \\(\\mathrm{SO}(3)\\)."
+            r"Pelo <b>Teorema Fundamental das Curvas no $\mathbb{R}^3$</b>, funções de curvatura "
+            r"$\kappa(s) > 0$ e torção $\tau(s)$ determinam a curva de modo único a menos "
+            r"de movimentos rígidos euclidianos ($\mathrm{SE}(3)$). A solução é integrada a partir "
+            r"do sistema diferencial linear de Frenet-Serret em $\mathrm{SO}(3)$."
         )
 
     switches_html = []
@@ -1382,6 +1614,10 @@ function updateHUDMetrics(idx) {{
   var kElem = document.getElementById("hud-kappa");
   var tElem = document.getElementById("hud-tau");
   var rhoElem = document.getElementById("hud-rho");
+  var sigElem = document.getElementById("hud-sigma");
+  var evoElem = document.getElementById("hud-evolute");
+  var invElem = document.getElementById("hud-involute");
+
   if (sElem) sElem.innerText = m.s.toFixed(3);
   if (rElem) {{
     if (m.is_planar) {{
@@ -1395,6 +1631,29 @@ function updateHUDMetrics(idx) {{
     tElem.innerText = m.is_planar ? "0.000 (Plana)" : m.tau.toFixed(3);
   }}
   if (rhoElem) rhoElem.innerText = m.rho === null ? "∞" : m.rho.toFixed(3);
+  if (sigElem && !m.is_planar) {{
+    sigElem.innerText = m.sigma === null ? "∞" : m.sigma.toFixed(3);
+  }}
+
+  if (evoElem) {{
+    if (m.Ex === null || m.Ex === undefined) {{
+      evoElem.innerText = "∞ (κ ≈ 0)";
+    }} else if (m.is_planar) {{
+      evoElem.innerText = "(" + m.Ex.toFixed(2) + ", " + m.Ey.toFixed(2) + ")";
+    }} else {{
+      evoElem.innerText = "(" + m.Ex.toFixed(2) + ", " + m.Ey.toFixed(2) + ", " + m.Ez.toFixed(2) + ")";
+    }}
+  }}
+
+  if (invElem) {{
+    if (m.Ix === null || m.Ix === undefined) {{
+      invElem.innerText = "—";
+    }} else if (m.is_planar) {{
+      invElem.innerText = "(" + m.Ix.toFixed(2) + ", " + m.Iy.toFixed(2) + ")";
+    }} else {{
+      invElem.innerText = "(" + m.Ix.toFixed(2) + ", " + m.Iy.toFixed(2) + ", " + m.Iz.toFixed(2) + ")";
+    }}
+  }}
 
   // Update vectors
   var vt = document.getElementById("hud-vec-t");
@@ -1582,8 +1841,7 @@ if (gd) {{
   }});
 }}
 
-// Listeners on window load
-window.addEventListener("DOMContentLoaded", function() {{
+function initDockAndSidebar() {{
   var slider = document.getElementById("dock-slider");
   if (slider) {{
     slider.addEventListener("input", function() {{
@@ -1610,19 +1868,26 @@ window.addEventListener("DOMContentLoaded", function() {{
   var sbOpenBtn = document.getElementById("sidebar-expand-btn");
   if (sbOpenBtn) sbOpenBtn.addEventListener("click", toggleSidebar);
 
-  // Render KaTeX formulas if available
-  if (window.renderMathInElement) {{
+  if (typeof renderAllKaTeX === "function") {{
+    renderAllKaTeX();
+  }} else if (window.renderMathInElement) {{
     renderMathInElement(document.body, {{
       delimiters: [
         {{ left: "$$", right: "$$", display: true }},
+        {{ left: "\\[", right: "\\]", display: true }},
         {{ left: "$", right: "$", display: false }},
-        {{ left: "\\(", right: "\\)", display: false }},
-        {{ left: "\\[", right: "\\]", display: true }}
+        {{ left: "\\(", right: "\\)", display: false }}
       ],
       throwOnError: false
     }});
   }}
-}});
+}}
+
+if (document.readyState === "loading") {{
+  document.addEventListener("DOMContentLoaded", initDockAndSidebar);
+}} else {{
+  initDockAndSidebar();
+}}
 """
 
     # Generate inner Plotly HTML snippet
@@ -1643,7 +1908,38 @@ window.addEventListener("DOMContentLoaded", function() {{
   <!-- KaTeX for mathematical rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderAllKaTeX()"></script>
+  <script>
+    function renderAllKaTeX() {{
+      if (typeof renderMathInElement === "function") {{
+        renderMathInElement(document.body, {{
+          delimiters: [
+            {{ left: "$$", right: "$$", display: true }},
+            {{ left: "\\[", right: "\\]", display: true }},
+            {{ left: "$", right: "$", display: false }},
+            {{ left: "\\(", right: "\\)", display: false }}
+          ],
+          throwOnError: false
+        }});
+      }}
+    }}
+    if (document.readyState === "loading") {{
+      document.addEventListener("DOMContentLoaded", renderAllKaTeX);
+    }} else {{
+      renderAllKaTeX();
+    }}
+    window.addEventListener("load", renderAllKaTeX);
+    var katexTries = 0;
+    var katexTimer = setInterval(function() {{
+      katexTries++;
+      if (typeof renderMathInElement === "function") {{
+        renderAllKaTeX();
+        clearInterval(katexTimer);
+      }} else if (katexTries > 50) {{
+        clearInterval(katexTimer);
+      }}
+    }}, 80);
+  </script>
   <style>
     * {{
       box-sizing: border-box;
@@ -1853,6 +2149,57 @@ window.addEventListener("DOMContentLoaded", function() {{
     .math-expr {{
       font-weight: 600;
       color: var(--text-title);
+    }}
+    .formula-card {{
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }}
+    .formula-row {{
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 6px 8px;
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+    }}
+    html[data-theme="dark"] .formula-row {{
+      background: rgba(255, 255, 255, 0.03);
+    }}
+    .formula-title {{
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }}
+    .formula-badge {{
+      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(37, 99, 235, 0.1);
+      color: var(--accent);
+    }}
+    .badge-t {{ background: rgba(16, 185, 129, 0.15); color: #10b981; }}
+    .badge-n {{ background: rgba(239, 68, 68, 0.15); color: #ef4444; }}
+    .badge-b {{ background: rgba(99, 102, 241, 0.15); color: #6366f1; }}
+    .badge-evo {{ background: rgba(245, 158, 11, 0.15); color: #d97706; }}
+    .badge-inv {{ background: rgba(168, 85, 247, 0.15); color: #9333ea; }}
+    .formula-math {{
+      font-size: 13px;
+      color: var(--text-title);
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 2px 0;
+    }}
+    .formula-desc {{
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.4;
     }}
     .hud-grid {{
       display: flex;
@@ -2269,7 +2616,49 @@ window.addEventListener("DOMContentLoaded", function() {{
           </div>
         </div>
 
-        <!-- Section 2: Grandezas Instantâneas (Live HUD) -->
+        <!-- Section 2: Teorema Fundamental — Equação e Triedro -->
+        <div class="card-section">
+          <div class="section-title">Teorema Fundamental — Equação e Triedro</div>
+          <div class="formula-card">
+            <div class="formula-row">
+              <div class="formula-title"><span>Curva Reconstruída</span> <span class="formula-badge">r(s)</span></div>
+              <div class="formula-math" id="math-curve-r">${formulas["curve_r"]}$</div>
+              <div class="formula-desc">{formulas["curve_desc"]}</div>
+            </div>
+            <div class="formula-row">
+              <div class="formula-title"><span>Vetor Tangente</span> <span class="formula-badge badge-t">T(s)</span></div>
+              <div class="formula-math" id="math-vec-t">${formulas["vec_t"]}$</div>
+            </div>
+            <div class="formula-row">
+              <div class="formula-title"><span>Vetor Normal Principal</span> <span class="formula-badge badge-n">N(s)</span></div>
+              <div class="formula-math" id="math-vec-n">${formulas["vec_n"]}$</div>
+            </div>
+            {binormal_formula_html}
+          </div>
+        </div>
+
+        <!-- Section 3: Curvas Associadas (Evoluta & Involuta) -->
+        <div class="card-section">
+          <div class="section-title">Curvas Associadas (Evoluta & Involuta)</div>
+          <div class="formula-card">
+            <div class="formula-row">
+              <div class="formula-title"><span>Evoluta (Centros de Curvatura)</span> <span class="formula-badge badge-evo">E(s)</span></div>
+              <div class="formula-math" id="math-evolute">${formulas["evolute"]}$</div>
+              <div class="formula-desc">{formulas["evolute_desc"]}</div>
+            </div>
+            <div class="formula-row">
+              <div class="formula-title"><span>Involuta / Evolvente de Corda</span> <span class="formula-badge badge-inv">I(s)</span></div>
+              <div class="formula-math" id="math-involute">${formulas["involute"]}$</div>
+              <div class="formula-desc">{formulas["involute_desc"]}</div>
+            </div>
+            <div class="formula-row">
+              <div class="formula-title"><span>Raios Característicos</span> <span class="formula-badge">ρ, σ</span></div>
+              <div class="formula-math" id="math-radii">${formulas["radii"]}$</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Grandezas Instantâneas (Live HUD) -->
         <div class="card-section">
           <div class="section-title">Grandezas Instantâneas</div>
           <div class="hud-grid">
@@ -2278,6 +2667,9 @@ window.addEventListener("DOMContentLoaded", function() {{
             <div class="hud-row"><span class="hud-label">Curvatura κ(s):</span><span class="hud-value" id="hud-kappa">{init_k:.3f}</span></div>
             <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">{init_t_str}</span></div>
             <div class="hud-row"><span class="hud-label">Raio Curvatura ρ(s):</span><span class="hud-value" id="hud-rho">{init_rho}</span></div>
+            {sigma_hud_row}
+            <div class="hud-row"><span class="hud-label">Evoluta E(s):</span><span class="hud-value" id="hud-evolute">{init_evo_str}</span></div>
+            <div class="hud-row"><span class="hud-label">Involuta I(s):</span><span class="hud-value" id="hud-involute">{init_inv_str}</span></div>
           </div>
           <!-- Frame Vectors -->
           <div class="hud-vectors">
@@ -2285,7 +2677,7 @@ window.addEventListener("DOMContentLoaded", function() {{
           </div>
         </div>
 
-        <!-- Section 3: Visibilidade do Aparato -->
+        <!-- Section 5: Visibilidade do Aparato -->
         <div class="card-section">
           <div class="section-title">Visibilidade do Aparato</div>
           <div class="toggles-list">
@@ -2293,7 +2685,7 @@ window.addEventListener("DOMContentLoaded", function() {{
           </div>
         </div>
 
-        <!-- Section 4: Fundamentação Teórica -->
+        <!-- Section 6: Fundamentação Teórica -->
         <div class="card-section">
           <div class="section-title">Fundamentação Teórica</div>
           <p class="theory-text">{theory_summary}</p>

@@ -531,3 +531,52 @@ class TestModernUIComponents:
         # CSS checks
         assert "margin-right: -360px" in planar_html
         assert "border-left: 1px solid var(--border-ui)" in planar_html
+
+    def test_reconstructed_formulas_and_frenet_frame(self, planar_html, space_html):
+        """Verify explicit mathematical formulas for r(s), T(s), N(s), and B(s) are present."""
+        assert 'id="math-curve-r"' in planar_html
+        assert 'id="math-vec-t"' in planar_html
+        assert 'id="math-vec-n"' in planar_html
+        assert 'id="math-curve-r"' in space_html
+        assert 'id="math-vec-t"' in space_html
+        assert 'id="math-vec-n"' in space_html
+        assert 'id="math-vec-b"' in space_html
+
+        # Circle formulas check
+        assert r"\sin(\kappa s)" in planar_html
+        # Helix formulas check
+        assert r"\omega" in space_html
+
+    def test_associated_curves_evolute_involute_and_radii(self, planar_html, space_html):
+        """Verify Evolute E(s), Involute I(s), and characteristic radii formulas are rendered."""
+        assert 'id="math-evolute"' in planar_html
+        assert 'id="math-involute"' in planar_html
+        assert 'id="math-radii"' in planar_html
+        assert 'id="math-evolute"' in space_html
+        assert 'id="math-involute"' in space_html
+        assert 'id="math-radii"' in space_html
+
+        # Evolute and involute descriptions
+        assert "Evoluta" in planar_html
+        assert "Involuta" in planar_html
+
+    def test_live_hud_evolute_and_involute(self, planar_html, space_html):
+        """Verify live instantaneous HUD metrics display Evolute, Involute, and Sigma."""
+        assert 'id="hud-evolute"' in planar_html
+        assert 'id="hud-involute"' in planar_html
+        assert 'id="hud-evolute"' in space_html
+        assert 'id="hud-involute"' in space_html
+        assert 'id="hud-sigma"' in space_html
+
+    def test_katex_robust_rendering_and_theory_text(self, planar_html, space_html):
+        """Verify renderAllKaTeX script in head and properly delimited LaTeX in theory summary."""
+        assert "renderAllKaTeX" in planar_html
+        assert "renderAllKaTeX" in space_html
+        # Theory text must contain standard LaTeX delimiters $...$
+        assert r"$\mathbb{R}^3$" in space_html
+        assert r"$\kappa(s) > 0$" in space_html
+        assert r"$\tau(s)$" in space_html
+        assert r"$\mathrm{SE}(3)$" in space_html
+        assert r"$\mathrm{SO}(3)$" in space_html
+        assert r"$\mathbb{R}^2$" in planar_html
+
