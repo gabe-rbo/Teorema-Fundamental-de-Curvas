@@ -154,7 +154,7 @@ class TestVisualizacaoCurvasPlanas2D:
 
         # Space curve uses Scatter3d and Mesh3d
         assert fig.data[0].type == "scatter3d"
-        assert len(fig.data) == 10
+        assert len(fig.data) == 12  # 10 apparatus traces + evolute + involute
 
         # 3D camera is configured
         assert fig.layout.scene.camera.eye.x == 1.6
@@ -171,5 +171,5 @@ class TestVisualizacaoCurvasPlanas2D:
         content = out_html.read_text(encoding="utf-8")
         assert "Teorema Fundamental das Curvas Planas" in content
         assert ">2D</span>" in content
-        assert "0.000 (Plana)" in content
+        assert "0.000 (plana)" in content
         assert "Diedro de Frenet" in content

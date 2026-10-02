@@ -313,6 +313,41 @@ def orthonormalize_frame(
 # ---------------------------------------------------------------------------
 
 
+def _may_have_real_singularity(expr: sp.Expr) -> bool:
+    """True if expr contains a construct that can blow up at a real point."""
+    if expr.has(sp.tan, sp.log, sp.asin, sp.acos):
+        return True
+    return any(
+        isinstance(node, sp.Pow) and not node.exp.is_nonnegative
+        for node in sp.preorder_traversal(expr)
+    )
+
+
+def _expr_is_zero(expr: sp.Expr) -> bool:
+    """
+    Cheap test for "expr is identically zero".
+
+    sp.simplify can take tens of seconds on derivatives of expressions such as
+    tanh(s - 5); every caller already has a numeric fallback, so zero-ness is decided
+    by exact structural zero or by evaluating the expression at a spread of points.
+    """
+    if expr == 0 or expr.is_zero:
+        return True
+    try:
+        symbols = sorted(expr.free_symbols, key=lambda sym: sym.name)
+        if not symbols:
+            return bool(abs(complex(expr.evalf())) < 1e-12)
+        if len(symbols) > 1:
+            return False
+        fn = sp.lambdify(symbols[0], expr, "numpy")
+        pts = np.array([0.37, 0.91, 1.43, 2.18, 3.05, 4.4, 6.1, 9.7])
+        with np.errstate(all="ignore"):
+            vals = np.asarray(fn(pts), dtype=complex)
+        return bool(np.all(np.isfinite(vals)) and np.all(np.abs(vals) < 1e-9))
+    except Exception:
+        return False
+
+
 def classify_curve(
     kappa_expr: sp.Expr,
     tau_expr: sp.Expr,
@@ -342,7 +377,7 @@ def classify_curve(
     # 1. Straight line (reta): kappa == 0
     is_kappa_zero = (
         kappa_expr.is_zero
-        or sp.simplify(kappa_expr) == 0
+        or _expr_is_zero(kappa_expr)
         or bool(np.all(np.abs(kappa_vals) < 1e-9))
     )
     if is_kappa_zero:
@@ -351,19 +386,19 @@ def classify_curve(
     # 2. Check if tau is identically zero
     is_tau_zero = (
         tau_expr.is_zero
-        or sp.simplify(tau_expr) == 0
+        or _expr_is_zero(tau_expr)
         or bool(np.all(np.abs(tau_vals) < 1e-9))
     )
 
     # 3. Check constancy of kappa and tau
     is_kappa_const = (
         len(kappa_expr.free_symbols) == 0
-        or sp.simplify(sp.diff(kappa_expr, s_sym)) == 0
+        or _expr_is_zero(sp.diff(kappa_expr, s_sym))
         or bool(np.ptp(kappa_vals) < 1e-8)
     )
     is_tau_const = (
         len(tau_expr.free_symbols) == 0
-        or sp.simplify(sp.diff(tau_expr, s_sym)) == 0
+        or _expr_is_zero(sp.diff(tau_expr, s_sym))
         or bool(np.ptp(tau_vals) < 1e-8)
     )
 
@@ -374,9 +409,9 @@ def classify_curve(
 
         # Check Cornu Spiral (kappa(s) = c*s + d with c != 0)
         try:
-            d2_k = sp.simplify(sp.diff(kappa_expr, s_sym, 2))
-            d1_k = sp.simplify(sp.diff(kappa_expr, s_sym, 1))
-            if d2_k == 0 and d1_k != 0:
+            d2_k = sp.diff(kappa_expr, s_sym, 2)
+            d1_k = sp.diff(kappa_expr, s_sym, 1)
+            if _expr_is_zero(d2_k) and not _expr_is_zero(d1_k):
                 return "espiral_de_cornu"
         except (
             sp.SympifyError,
@@ -396,9 +431,9 @@ def classify_curve(
         # Check Logarithmic Spiral (1/kappa(s) = a*s + b with a != 0)
         try:
             inv_k = 1 / kappa_expr
-            d2_inv = sp.simplify(sp.diff(inv_k, s_sym, 2))
-            d1_inv = sp.simplify(sp.diff(inv_k, s_sym, 1))
-            if d2_inv == 0 and d1_inv != 0:
+            d2_inv = sp.diff(inv_k, s_sym, 2)
+            d1_inv = sp.diff(inv_k, s_sym, 1)
+            if _expr_is_zero(d2_inv) and not _expr_is_zero(d1_inv):
                 return "espiral_logaritmica"
         except (
             sp.SympifyError,
@@ -426,8 +461,8 @@ def classify_curve(
         # Lancret's Theorem: tau(s)/kappa(s) = const != 0
         try:
             ratio = tau_expr / kappa_expr
-            d_ratio = sp.simplify(sp.diff(ratio, s_sym))
-            if d_ratio == 0 and not ratio.is_zero:
+            d_ratio = sp.diff(ratio, s_sym)
+            if _expr_is_zero(d_ratio) and not ratio.is_zero:
                 return "helice_cilindrica_geral"
         except (
             sp.SympifyError,
@@ -599,6 +634,8 @@ def reconstruct_curve(
     # 3. Analytic singularity pre-check
     s_sym = sp.Symbol("s")
     for expr_to_check in (kappa_expr, tau_expr):
+        if not _may_have_real_singularity(expr_to_check):
+            continue  # sp.singularities is very slow on e.g. tanh; the dense numeric check below still covers it
         try:
             sings = sp.singularities(expr_to_check, s_sym)
             if hasattr(sings, "__iter__"):
@@ -663,7 +700,7 @@ def reconstruct_curve(
     # 5. Check if curve is planar (tau == 0 identically)
     is_tau_zero = (
         tau_expr.is_zero
-        or sp.simplify(tau_expr) == 0
+        or _expr_is_zero(tau_expr)
         or bool(np.all(np.abs(tau_vals) < 1e-9))
     )
 
