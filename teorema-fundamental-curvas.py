@@ -44,8 +44,10 @@ from pathlib import Path
 
 # Ensure script directory is in sys.path for robust imports across all invocation contexts
 SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+SRC_DIR = SCRIPT_DIR / "src"
+for _path in (SRC_DIR, SCRIPT_DIR):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import sympy as sp
 import curva_engine  # noqa: E402

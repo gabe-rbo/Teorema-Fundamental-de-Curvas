@@ -1,8 +1,8 @@
-// Compares the JS engine (app/js) with reference data produced by the Python engine.
+// Compares the JS engine (web/js) with reference data produced by the Python engine.
 // Reads {cases: [...]} from stdin, prints {errors: [...]} as JSON.
 const path = require("path");
-const Expr = require(path.join(__dirname, "../../app/js/expr.js"));
-const Eng = require(path.join(__dirname, "../../app/js/engine.js"));
+const Expr = require(path.join(__dirname, "../../web/js/expr.js"));
+const Eng = require(path.join(__dirname, "../../web/js/engine.js"));
 
 let input = "";
 process.stdin.on("data", (c) => (input += c));

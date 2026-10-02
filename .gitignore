@@ -34,18 +34,7 @@ dist/
 .agents/
 .agents/teamwork/
 
-# Ignore generated HTML output files except canonical gallery examples
+# Ignore generated HTML output files, except the website (index.html) and its template
 *.html
-!circulo-k1-t0-I0_6.28.html
-!helice_circular-k1-t1-I0_6.28.html
-!helice_cilindrica_geral-k1_plus_0_1_mult_sin_s-t2_mult_1_plus_0_1_mult_sin_s-I0_6.28.html
-!espiral_de_cornu-ks-t0-I0_5.html
-!espiral_logaritmica-k1_div_s_plus_1-t0-I0_10.html
-!clothoid.html
-
-# Generated example viewers (run exemplos/gerar_galeria.py)
-exemplos/*.html
-
-# Interactive app
-!app/index.html
-!app/triedro.html
+!index.html
+!web/template.html

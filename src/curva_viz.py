@@ -60,7 +60,7 @@ _QUAD_K = [2, 3]
 # ---------------------------------------------------------------------------
 # Triedro design system (design-system/): tokens, component CSS, Plotly theme
 # ---------------------------------------------------------------------------
-_DESIGN_DIR = Path(__file__).resolve().parent / "design-system"
+_DESIGN_DIR = Path(__file__).resolve().parent.parent / "design-system"
 
 
 def _read_design_asset(relative: str) -> str:
@@ -71,7 +71,7 @@ def _read_design_asset(relative: str) -> str:
     except OSError as exc:
         raise FileNotFoundError(
             f"Design system asset not found: {path}. "
-            "Keep the design-system/ folder next to curva_viz.py."
+            "Keep the design-system/ folder at the repository root (next to src/)."
         ) from exc
 
 

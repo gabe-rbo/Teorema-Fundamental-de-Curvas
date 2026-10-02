@@ -2,8 +2,8 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const path = require("path");
-const Expr = require(path.join(__dirname, "../../app/js/expr.js"));
-const Eng = require(path.join(__dirname, "../../app/js/engine.js"));
+const Expr = require(path.join(__dirname, "../../web/js/expr.js"));
+const Eng = require(path.join(__dirname, "../../web/js/engine.js"));
 
 const run = (k, t, s0, s1, n, params = [1, 1, 1]) =>
   Eng.reconstruct({ kf: Expr.compile(Expr.parse(k)), tf: Expr.compile(Expr.parse(t)), params, s0, s1, n, sub: 2 });
