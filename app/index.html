@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233040c8'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-style='italic' font-size='22' text-anchor='middle' fill='white'%3E%E2%88%AB%3C/text%3E%3C/svg%3E">
+  <title>Triedro — Teorema Fundamental de Curvas</title>
+  <link rel="stylesheet" href="../design-system/components/bundle.css">
+  <link rel="stylesheet" href="../design-system/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" onload="window.Triedro && Triedro.App && Triedro.App.renderTex()"></script>
+  <script>
+    // Apply the saved theme before first paint.
+    try { if (localStorage.getItem("triedro-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark"); } catch (e) {}
+  </script>
+</head>
+<body class="tf-root">
+  <header class="topbar">
+    <div class="tf-brand"><span class="tf-mark">∫</span><h1 class="tf-title">Triedro</h1></div>
+    <nav class="nav" aria-label="Principal">
+      <a href="#/painel" id="nav-painel">Painel interativo</a>
+      <a href="#/galeria" id="nav-galeria">Galeria de curvas</a>
+    </nav>
+    <span class="spacer"></span>
+    <button id="theme-toggle-btn" class="tf-iconbtn" title="Alternar tema" aria-label="Alternar tema">
+      <svg id="theme-icon" viewBox="0 0 16 16"><path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6z"/></svg>
+    </button>
+  </header>
+
+  <!-- ============ Painel interativo ============ -->
+  <main id="view-painel" class="view">
+    <section id="plot-container" class="tf-stage" aria-label="Visualização da curva">
+      <canvas id="cv-bg"></canvas>
+      <canvas id="cv-fg" aria-label="Curva: arraste para girar ou mover, role para aproximar, clique para escolher um ponto"></canvas>
+      <div class="tf-legend" id="legend"></div>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div class="tf-expand-slot">
+        <button id="sidebar-expand-btn" class="tf-expand" title="Expandir painel" aria-label="Expandir painel">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>
+          <span>Painel</span>
+        </button>
+      </div>
+      <div class="tf-dock-slot">
+        <div id="control-dock" class="tf-dock">
+          <div class="tf-transport">
+            <button id="btn-first" class="tf-dockbtn" aria-label="Início" title="Início (s₀)"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.8 8z"/></svg></button>
+            <button id="btn-prev" class="tf-dockbtn" aria-label="Passo anterior" title="Passo anterior"><svg viewBox="0 0 16 16"><path d="M11.5 3v10L4.5 8z"/></svg></button>
+            <button id="btn-play" class="tf-dockbtn tf-dockbtn--play" aria-label="Reproduzir ou pausar" title="Reproduzir ou pausar"><svg id="play-icon" viewBox="0 0 16 16"><path d="M4.5 2.6v10.8L13 8z"/></svg></button>
+            <button id="btn-next" class="tf-dockbtn" aria-label="Próximo passo" title="Próximo passo"><svg viewBox="0 0 16 16"><path d="M4.5 3v10l7-5z"/></svg></button>
+            <button id="btn-last" class="tf-dockbtn" aria-label="Fim" title="Fim (s₁)"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3l7.2 5L3 13z"/></svg></button>
+          </div>
+          <div class="tf-scrub">
+            <span class="tf-rail"></span><span class="tf-fill" id="dock-fill"></span>
+            <span class="tf-ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <input type="range" id="dock-slider" min="0" max="1" value="0" step="1" aria-label="Comprimento de arco s">
+          </div>
+          <div class="tf-sread">
+            <span class="tf-s-var">s</span><span>=</span>
+            <span class="tf-s-val" id="dock-s">0.000</span>
+            <span class="tf-s-max" id="dock-smax">/ 0.000</span>
+            <span class="tf-s-pct" id="dock-pct">0%</span>
+          </div>
+          <button id="btn-speed" class="tf-speed" aria-label="Velocidade da reprodução" title="Velocidade da reprodução">1×</button>
+          <button id="btn-fit" class="tf-dockbtn" aria-label="Ajustar vista" title="Ajustar vista (duplo clique na curva)"><svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <aside id="sidebar" class="tf-sidebar">
+      <header class="tf-sidebar-head">
+        <div class="tf-head-row">
+          <div class="tf-brand">
+            <div><h2 class="tf-title" style="font-size:18px;line-height:22px">Painel</h2><p class="tf-subtitle">Defina κ(s) e τ(s) e veja a curva em tempo real</p></div>
+          </div>
+          <div class="tf-actions">
+            <button id="sidebar-toggle-btn" class="tf-iconbtn" title="Recolher painel" aria-label="Recolher painel"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg></button>
+          </div>
+        </div>
+        <div class="tf-badges"><span class="tf-badge tf-badge--class" id="badge-class">—</span><span class="tf-badge tf-badge--dim" id="badge-dim">—</span></div>
+      </header>
+
+      <div id="hud-card" class="tf-sidebar-body">
+        <details class="tf-panel" open>
+          <summary><h3 class="tf-overline"><span class="tf-sec">§1</span>Curvatura e torção</h3></summary>
+          <div class="field">
+            <label for="in-k">Curvatura <em>κ</em>(<em>s</em>)</label>
+            <input id="in-k" class="tf-input" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="err-k">
+            <div class="fx-preview" id="tex-k"></div>
+            <p class="field-err" id="err-k" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="in-t">Torção <em>τ</em>(<em>s</em>)</label>
+            <input id="in-t" class="tf-input" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="err-t">
+            <div class="fx-preview" id="tex-t"></div>
+            <p class="field-err" id="err-t" role="alert"></p>
+          </div>
+          <p class="field-err" id="err-calc" role="alert"></p>
+          <p class="tf-hint">Use <code>s</code>, <code>a</code>, <code>b</code>, <code>c</code>, <code>pi</code>, <code>e</code>, <code>+ − * / ^</code> e as funções <code>sin cos tan exp log sqrt sinh cosh tanh asin acos atan abs</code>. Com τ = 0 a curva é plana. A curvatura pode mudar de sinal.</p>
+          <div class="field">
+            <label for="in-preset">Carregar um exemplo</label>
+            <select id="in-preset" class="tf-input"><option value="">Escolher…</option></select>
+          </div>
+        </details>
+
+        <details class="tf-panel" open>
+          <summary><h3 class="tf-overline"><span class="tf-sec">§2</span>Parâmetros</h3></summary>
+          <p class="tf-hint">Use <em>a</em>, <em>b</em> e <em>c</em> nas expressões e arraste: a curva muda em tempo real.</p>
+          <div id="params"></div>
+        </details>
+
+        <details class="tf-panel" open>
+          <summary><h3 class="tf-overline"><span class="tf-sec">§3</span>Intervalo e amostragem</h3></summary>
+          <div class="row2">
+            <div class="field"><label for="in-s0"><em>s</em><sub>0</sub></label><input id="in-s0" class="tf-input" type="number" step="any"></div>
+            <div class="field"><label for="in-s1"><em>s</em><sub>1</sub></label><input id="in-s1" class="tf-input" type="number" step="any"></div>
+          </div>
+          <div class="field">
+            <label for="in-n">Pontos da curva: <span id="out-n" class="tf-mono"></span></label>
+            <input id="in-n" class="tf-range" type="range" min="50" max="10000" step="10">
+          </div>
+          <div class="field">
+            <label for="in-sub">Precisão da integração</label>
+            <select id="in-sub" class="tf-input"><option value="1">Rápida</option><option value="2" selected>Normal</option><option value="4">Alta</option><option value="8">Máxima</option></select>
+          </div>
+          <div class="field">
+            <label for="in-lw">Espessura da curva: <span id="out-lw" class="tf-mono"></span></label>
+            <input id="in-lw" class="tf-range" type="range" min="1" max="6" step="0.5" value="2.5">
+          </div>
+        </details>
+
+        <details class="tf-panel" open>
+          <summary><h3 class="tf-overline"><span class="tf-sec">§4</span>Grandezas instantâneas</h3></summary>
+          <div class="tf-readouts">
+            <div class="tf-readout"><span class="tf-readout-label">Comprimento de arco <em>s</em></span><span class="tf-readout-value" id="hud-s">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Posição <em>r</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-r">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Curvatura <em>κ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-kappa">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Torção <em>τ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-tau">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Raio de curvatura <em>ρ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-rho">—</span></div>
+            <div class="tf-readout" id="row-sigma"><span class="tf-readout-label">Raio de torção <em>σ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-sigma">—</span></div>
+          </div>
+          <div class="tf-vecrow"><span class="tf-tag tf-tag--t">T</span><span class="tf-readout-value" id="hud-T">—</span></div>
+          <div class="tf-vecrow"><span class="tf-tag tf-tag--n">N</span><span class="tf-readout-value" id="hud-N">—</span></div>
+          <div class="tf-vecrow" id="row-B"><span class="tf-tag tf-tag--b">B</span><span class="tf-readout-value" id="hud-B">—</span></div>
+        </details>
+
+        <details class="tf-panel">
+          <summary><h3 class="tf-overline"><span class="tf-sec">§5</span>Evoluta e involuta</h3></summary>
+          <div class="tf-vecrow"><span class="tf-tag tf-tag--e">E</span><span class="tf-readout-label">Evoluta</span></div>
+          <div class="tf-readouts">
+            <div class="tf-readout"><span class="tf-readout-label">Posição <em>E</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-E">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Curvatura <em>κ</em><sub>E</sub></span><span class="tf-readout-value" id="hud-kE">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Torção <em>τ</em><sub>E</sub></span><span class="tf-readout-value" id="hud-tE">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Rapidez |<em>E</em>′(<em>s</em>)|</span><span class="tf-readout-value" id="hud-vE">—</span></div>
+          </div>
+          <div class="tf-vecrow"><span class="tf-tag tf-tag--i">I</span><span class="tf-readout-label">Involuta</span></div>
+          <div class="tf-readouts">
+            <div class="tf-readout"><span class="tf-readout-label">Posição <em>I</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-I">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Curvatura <em>κ</em><sub>I</sub></span><span class="tf-readout-value" id="hud-kI">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Torção <em>τ</em><sub>I</sub></span><span class="tf-readout-value" id="hud-tI">—</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Rapidez |<em>I</em>′(<em>s</em>)|</span><span class="tf-readout-value" id="hud-vI">—</span></div>
+          </div>
+        </details>
+
+        <details class="tf-panel">
+          <summary><h3 class="tf-overline"><span class="tf-sec">§6</span>Visibilidade do aparato</h3></summary>
+          <div id="toggles"></div>
+        </details>
+
+        <details class="tf-panel">
+          <summary><h3 class="tf-overline"><span class="tf-sec">§7</span>Fundamentação teórica</h3></summary>
+          <p class="tf-prose">O <b>Teorema Fundamental das Curvas</b> garante que κ(s) e τ(s) determinam a curva a menos de movimentos rígidos. O triedro de Frenet {T, N, B} é integrado pelo sistema abaixo, pelo método de Magnus de 4ª ordem, que mantém o triedro exatamente ortonormal.</p>
+          <div class="tf-formula"><div class="tf-formula-math formula-static" data-tex="\begin{pmatrix} T' \\ N' \\ B' \end{pmatrix} = \begin{pmatrix} 0 &amp; \kappa &amp; 0 \\ -\kappa &amp; 0 &amp; \tau \\ 0 &amp; -\tau &amp; 0 \end{pmatrix} \begin{pmatrix} T \\ N \\ B \end{pmatrix}, \quad r' = T"></div></div>
+          <div class="tf-formula"><div class="tf-formula-math formula-static" data-tex="E(s) = r(s) + \frac{1}{\kappa(s)}\,N(s), \qquad I(s) = r(s) + (s_1 - s)\,T(s)"></div></div>
+          <p class="tf-hint">Clique na curva para escolher um ponto, arraste para girar ou mover, role para aproximar e dê duplo clique para ajustar a vista.</p>
+        </details>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ Galeria ============ -->
+  <main id="view-galeria" class="view" hidden>
+    <header class="gal-head">
+      <h1>Galeria de curvas</h1>
+      <p>Cada curva foi reconstruída a partir de κ(s) e τ(s) pelo Teorema Fundamental das Curvas. Clique em uma curva para abri-la no painel e editar as funções.</p>
+      <div class="chips" role="group" aria-label="Filtrar por dimensão">
+        <button class="chip" data-filter="all" aria-pressed="true">Todas</button>
+        <button class="chip" data-filter="2D" aria-pressed="false">Planas (2D)</button>
+        <button class="chip" data-filter="3D" aria-pressed="false">Espaciais (3D)</button>
+      </div>
+    </header>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <script src="js/expr.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/presets.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

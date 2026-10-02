@@ -45,3 +45,7 @@ dist/
 
 # Generated example viewers (run exemplos/gerar_galeria.py)
 exemplos/*.html
+
+# Interactive app
+!app/index.html
+!app/triedro.html

@@ -16,6 +16,27 @@ Uma ferramenta computacional e acadêmica em Python que reconstrói curvas plana
 
 ---
 
+## Aplicativo interativo (`app/`)
+
+Além da CLI, o repositório traz um aplicativo web que roda **inteiro no navegador**, sem servidor Python:
+
+- **Painel interativo:** digite $\kappa(s)$ e $\tau(s)$ (com `s`, parâmetros `a`, `b`, `c`, `pi`, `e` e as funções `sin cos tan exp log sqrt sinh cosh tanh asin acos atan abs`), mude o intervalo $[s_0, s_1]$, o número de pontos e a precisão, e veja a curva se atualizar em tempo real. Os parâmetros `a`, `b`, `c` têm sliders. A curvatura pode mudar de sinal (curvas planas com pontos de inflexão). O estado fica na URL, então qualquer curva pode ser compartilhada por link.
+- **Galeria de curvas:** 32 curvas prontas com miniaturas ao vivo; clicar em uma abre a curva no painel para editar.
+- **Leve:** um único recálculo por quadro, expressões compiladas uma vez, canvas em duas camadas (curvas estáticas e aparato por quadro) e miniaturas desenhadas só quando visíveis. Com 5000 pontos, arrastar um slider custa cerca de 4 ms por atualização e um quadro de reprodução, menos de 1 ms.
+- **Motor em JavaScript:** triedro de Frenet integrado pelo método de Magnus de 4ª ordem (ortonormal por construção) e derivadas exatas por séries de Taylor, validado contra o motor Python em `tests/test_js_engine_parity.py`.
+
+Para abrir, dê um duplo clique em **`app/triedro.html`**: é o aplicativo inteiro em um único arquivo (CSS e scripts embutidos), que funciona em qualquer navegador sem servidor. Esse arquivo é gerado a partir de `app/index.html`, `app/css`, `app/js` e `design-system/`; depois de editar qualquer um deles, rode:
+
+```bash
+python3 app/build.py
+```
+
+(Para desenvolver, também dá para servir a raiz do repositório com `python3 -m http.server 8000` e abrir `http://localhost:8000/app/index.html`.)
+
+Os testes do motor JavaScript rodam com `node --test tests/js` (e também dentro do `pytest`, se o Node estiver instalado).
+
+---
+
 ## Sumário
 1. [Fundamentação Teórica](#fundamentação-teórica)
    - [Enunciado do Teorema Fundamental das Curvas Espaciais](#enunciado-do-teorema-fundamental-das-curvas-espaciais)

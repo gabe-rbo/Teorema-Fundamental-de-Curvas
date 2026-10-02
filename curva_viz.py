@@ -86,10 +86,6 @@ _LIGHT_LAYOUT: dict[str, Any] = _THEME["light"]["layout"]
 _DOCK_CLEARANCE = 134
 _DOCK_CLEARANCE_3D = 70
 
-# Largest growth of the 3D axis box (relative to the curve's own box) to fit the
-# evolute and involute; beyond it they are clipped so the curve stays readable.
-_ASSOC_BOX_MAX_FACTOR = 3.0
-
 # Plotly marker diameters (the theme size is the visual radius token).
 _POINT_SIZE_2D = 12
 _POINT_SIZE_3D = 9
@@ -502,14 +498,12 @@ def _build_associated_curve_traces(
 ) -> list[go.Scatter | go.Scatter3d]:
     """
     Build the static evolute E(s) = r + N/kappa (dashed) and involute
-    I(s) = r + (s1 - s) T (dotted) traces, over the whole parameter range.
-
-    Evolute points where the curvature radius exceeds 10x the curve extent are
-    dropped (None) so a vanishing curvature does not blow up the plot.
+    I(s) = r + (s1 - s) T (solid), over the whole parameter range. Nothing is
+    clipped by size; only points where kappa ~ 0 (no center of curvature) are dropped.
     """
     safe_k = np.where(np.abs(kappa) > 1e-5, kappa, np.nan)
     rho_signed = 1.0 / safe_k
-    ok = np.isfinite(rho_signed) & (np.abs(rho_signed) <= 10.0 * span)
+    ok = np.isfinite(rho_signed)
     evo = r[:dims, :] + rho_signed[None, :] * N_mat[:dims, :]
     inv = r[:dims, :] + (s[-1] - s)[None, :] * T_mat[:dims, :]
 
@@ -1325,31 +1319,17 @@ def _build_spatial_3d_figure(
             init_ys.extend([float(c0[1] - rho0), float(c0[1] + rho0)])
             init_zs.extend([float(c0[2] - rho0), float(c0[2] + rho0)])
 
-    def _box(xs: list[float], ys: list[float], zs: list[float]) -> tuple[list[float], float]:
-        """Midpoints and largest side of the axis-aligned box around the given values."""
-        sides = [(min(v), max(v)) for v in (xs, ys, zs)]
-        return (
-            [0.5 * (lo + hi) for lo, hi in sides],
-            max(max(hi - lo for lo, hi in sides), 0.1),
-        )
-
-    base_mid, base_span = _box(init_xs, init_ys, init_zs)
-
     # The 3D box cannot be panned or zoomed open (zoom only moves the camera), so it must
-    # contain the evolute and involute or Plotly clips them at its walls. A long interval
-    # makes the involute huge, though, and would shrink the curve to a speck, so the box
-    # grows to fit them only up to _ASSOC_BOX_MAX_FACTOR times the curve's own box.
+    # contain the whole evolute and involute or Plotly clips them at its walls.
     for trace in assoc_traces:
         for coords, axis_vals in zip((trace.x, trace.y, trace.z), (init_xs, init_ys, init_zs)):
             finite = [v for v in coords if v is not None]
             if finite:
                 axis_vals.extend([min(finite), max(finite)])
-    full_mid, full_span = _box(init_xs, init_ys, init_zs)
-    if full_span <= _ASSOC_BOX_MAX_FACTOR * base_span:
-        (x_mid, y_mid, z_mid), max_span = full_mid, full_span
-    else:
-        (x_mid, y_mid, z_mid), max_span = base_mid, _ASSOC_BOX_MAX_FACTOR * base_span
 
+    sides = [(min(v), max(v)) for v in (init_xs, init_ys, init_zs)]
+    x_mid, y_mid, z_mid = (0.5 * (lo + hi) for lo, hi in sides)
+    max_span = max(max(hi - lo for lo, hi in sides), 0.1)
     pad = 0.15 * max_span
     half_len = 0.5 * max_span + pad
     x_range = [float(x_mid - half_len), float(x_mid + half_len)]
