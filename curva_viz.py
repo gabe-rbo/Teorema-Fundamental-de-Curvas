@@ -39,6 +39,7 @@ Theoretical foundations:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -57,19 +58,97 @@ _QUAD_J = [1, 2]
 _QUAD_K = [2, 3]
 
 # ---------------------------------------------------------------------------
-# Refined scientific color palette (Accessible, elegant, high-contrast)
+# Triedro design system (design-system/): tokens, component CSS, Plotly theme
 # ---------------------------------------------------------------------------
-COLOR_CURVE = "#2563eb"        # Sapphire Blue
-COLOR_POINT = "#f59e0b"        # Amber
-COLOR_TANGENT = "#10b981"      # Emerald Green
-COLOR_NORMAL = "#ef4444"       # Ruby / Coral Red
-COLOR_BINORMAL = "#6366f1"     # Violet / Indigo
-COLOR_CIRCLE = "#f59e0b"       # Amber
-COLOR_LT_LINE = "rgba(16, 185, 129, 0.45)"
-COLOR_LN_LINE = "rgba(239, 68, 68, 0.35)"
-COLOR_PLANE_OSC = "rgba(37, 99, 235, 0.22)"
-COLOR_PLANE_NORM = "rgba(239, 68, 68, 0.18)"
-COLOR_PLANE_RECT = "rgba(99, 102, 241, 0.18)"
+_DESIGN_DIR = Path(__file__).resolve().parent / "design-system"
+
+
+def _read_design_asset(relative: str) -> str:
+    """Read a design-system asset, failing loudly if the folder is missing."""
+    path = _DESIGN_DIR / relative
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise FileNotFoundError(
+            f"Design system asset not found: {path}. "
+            "Keep the design-system/ folder next to curva_viz.py."
+        ) from exc
+
+
+_THEME: dict[str, Any] = json.loads(
+    _read_design_asset("assets/Plotly/triedro-plotly-theme.json")
+)["themes"]
+_LIGHT_TRACES: dict[str, Any] = _THEME["light"]["traces"]
+_LIGHT_LAYOUT: dict[str, Any] = _THEME["light"]["layout"]
+
+# Bottom margin (px) that keeps the plot clear of the floating control dock
+# (dock height 58 + 24 from the edge, plus room for the axis title).
+_DOCK_CLEARANCE = 134
+_DOCK_CLEARANCE_3D = 70
+
+# Largest growth of the 3D axis box (relative to the curve's own box) to fit the
+# evolute and involute; beyond it they are clipped so the curve stays readable.
+_ASSOC_BOX_MAX_FACTOR = 3.0
+
+# Plotly marker diameters (the theme size is the visual radius token).
+_POINT_SIZE_2D = 12
+_POINT_SIZE_3D = 9
+
+
+def _split_rgba(color: str) -> tuple[str, float]:
+    """Split 'rgba(r, g, b, a)' into ('rgb(r, g, b)', a); other colors keep alpha 1."""
+    m = re.fullmatch(r"rgba\(([^,]+),([^,]+),([^,]+),([^)]+)\)", color.strip())
+    if not m:
+        return color, 1.0
+    r, g, b, a = (part.strip() for part in m.groups())
+    return f"rgb({r}, {g}, {b})", float(a)
+
+
+COLOR_CURVE = _LIGHT_TRACES["curve"]["color"]
+COLOR_POINT = _LIGHT_TRACES["active_point"]["color"]
+COLOR_POINT_OUTLINE = _LIGHT_TRACES["active_point"]["outline"]
+COLOR_TANGENT = _LIGHT_TRACES["tangent"]["color"]
+COLOR_NORMAL = _LIGHT_TRACES["normal"]["color"]
+COLOR_BINORMAL = _LIGHT_TRACES["binormal"]["color"]
+COLOR_CIRCLE = _LIGHT_TRACES["osculating_circle"]["color"]
+COLOR_LT_LINE = _LIGHT_TRACES["tangent_line"]["color"]
+COLOR_LN_LINE = _LIGHT_TRACES["normal_line"]["color"]
+COLOR_PLANE_OSC, _OPACITY_PLANE_OSC = _split_rgba(_LIGHT_TRACES["plane_osculating"]["color"])
+COLOR_PLANE_NORM, _OPACITY_PLANE_NORM = _split_rgba(_LIGHT_TRACES["plane_normal"]["color"])
+COLOR_PLANE_RECT, _OPACITY_PLANE_RECT = _split_rgba(_LIGHT_TRACES["plane_rectifying"]["color"])
+
+# Roles (keys of the theme's `traces`) of each Plotly trace, by trace index.
+_TRACE_ROLES_2D = [
+    "curve", "active_point", "tangent", "normal",
+    "tangent_line", "normal_line", "osculating_circle", "evolute", "involute",
+]
+_TRACE_ROLES_3D = [
+    "curve", "active_point", "tangent", "normal", "binormal", "tangent_line",
+    "plane_osculating", "plane_normal", "plane_rectifying", "osculating_circle",
+    "evolute", "involute",
+]
+
+
+def _themed_base_layout() -> dict[str, Any]:
+    """Layout fragments shared by 2D and 3D figures (light theme, transparent ground)."""
+    return dict(
+        paper_bgcolor=_LIGHT_LAYOUT["paper_bgcolor"],
+        plot_bgcolor=_LIGHT_LAYOUT["plot_bgcolor"],
+        font=_LIGHT_LAYOUT["font"],
+        hoverlabel=_LIGHT_LAYOUT["hoverlabel"],
+        modebar=_LIGHT_LAYOUT["modebar"],
+    )
+
+
+def _themed_axis_3d(title: str, axis_range: list[float]) -> dict[str, Any]:
+    """3D scene axis with fixed range and the theme's axis fragment."""
+    return dict(
+        title=title,
+        range=axis_range,
+        autorange=False,
+        **_LIGHT_LAYOUT["scene"]["axis"],
+    )
+
 
 # ---------------------------------------------------------------------------
 # Geometric classification display names
@@ -145,6 +224,81 @@ def _compute_circle_coords(
         circle_pts[1, :].tolist(),
         circle_pts[2, :].tolist(),
     )
+
+
+_ASSOC_KEYS = ("kE", "tE", "vE", "kI", "tI", "vI")
+
+
+def _associated_curve_invariants(
+    curve_data: CurveResult, is_planar: bool
+) -> dict[str, np.ndarray]:
+    """
+    Curvature, torsion and speed of the evolute E(s) = r + N/kappa and the involute
+    I(s) = r + (s1 - s) T, each viewed as a curve parametrized by s.
+
+    Exact symbolic calculus in the Frenet frame: a vector v = v_T T + v_N N + v_B B has
+        Dv = (v_T' - kappa v_N) T + (v_N' + kappa v_T - tau v_B) N + (v_B' + tau v_N) B,
+    and E' = -(kappa'/kappa^2) N + (tau/kappa) B, I' = (s1 - s) kappa N. For a curve with
+    velocity v: curvature = |v x Dv| / |v|^3, torsion = (v x Dv) . D^2v / |v x Dv|^2.
+    Points where an invariant is undefined (E' = 0, kappa = 0, ...) are NaN.
+
+    Returns arrays keyed kE, tE, vE (evolute) and kI, tI, vI (involute): curvature,
+    torsion and speed |dX/ds|.
+    """
+    from curva_engine import parse_and_validate_expression
+
+    s_arr = np.asarray(curve_data.s, dtype=float)
+    out = {k: np.full_like(s_arr, np.nan) for k in _ASSOC_KEYS}
+    try:
+        s_sym = sp.Symbol("s")
+        kap = parse_and_validate_expression(str(curve_data.kappa_expr))
+        tau = sp.Integer(0) if is_planar else parse_and_validate_expression(str(curve_data.tau_expr))
+        length = sp.Float(float(s_arr[-1])) - s_sym
+
+        def d_frame(v):
+            vt, vn, vb = v
+            return (
+                sp.diff(vt, s_sym) - kap * vn,
+                sp.diff(vn, s_sym) + kap * vt - tau * vb,
+                sp.diff(vb, s_sym) + tau * vn,
+            )
+
+        def invariants(v1):
+            v2 = d_frame(v1)
+            v3 = d_frame(v2)
+            cross = (
+                v1[1] * v2[2] - v1[2] * v2[1],
+                v1[2] * v2[0] - v1[0] * v2[2],
+                v1[0] * v2[1] - v1[1] * v2[0],
+            )
+            c2 = sum(c**2 for c in cross)
+            speed2 = sum(x**2 for x in v1)
+            return (
+                sp.sqrt(c2) / speed2 ** sp.Rational(3, 2),
+                sum(c * x for c, x in zip(cross, v3)) / c2,
+                sp.sqrt(speed2),
+            )
+
+        evolute_v = (sp.Integer(0), -sp.diff(kap, s_sym) / kap**2, tau / kap)
+        involute_v = (sp.Integer(0), length * kap, sp.Integer(0))
+        for (kk, tk, vk), v1 in ((("kE", "tE", "vE"), evolute_v), (("kI", "tI", "vI"), involute_v)):
+            for key, expr in zip((kk, tk, vk), invariants(v1)):
+                fn = sp.lambdify(s_sym, expr, "numpy")
+                with np.errstate(all="ignore"):
+                    vals = np.broadcast_to(np.asarray(fn(s_arr), dtype=float), s_arr.shape)
+                out[key] = np.where(np.isfinite(vals), vals, np.nan)
+    except Exception:
+        return {k: np.full_like(s_arr, np.nan) for k in _ASSOC_KEYS}
+    if is_planar:
+        for key in ("tE", "tI"):
+            out[key] = np.where(np.isfinite(out["kE" if key == "tE" else "kI"]), 0.0, np.nan)
+    return out
+
+
+def _opt_float(arr: np.ndarray, idx: int) -> float | None:
+    """JSON-safe scalar: NaN becomes None (rendered as an em dash in the viewer)."""
+    v = float(arr[idx])
+    return v if np.isfinite(v) else None
 
 
 def _build_apparatus_traces(
@@ -223,7 +377,12 @@ def _build_apparatus_traces(
         z=[float(P[2])],
         mode="markers",
         name="Ponto Ativo r(s)",
-        marker=dict(size=8, color=COLOR_POINT, symbol="circle"),
+        marker=dict(
+            size=_POINT_SIZE_3D,
+            color=COLOR_POINT,
+            symbol="circle",
+            line=dict(color=COLOR_POINT_OUTLINE, width=2),
+        ),
         hovertemplate="<b>Ponto Ativo r(s)</b><br>x: %{x:.3f}<br>y: %{y:.3f}<br>z: %{z:.3f}<extra></extra>",
     )
     # Trace 2: Vetor Tangente T
@@ -233,7 +392,7 @@ def _build_apparatus_traces(
         z=[float(P[2]), float(P[2] + L_vec * T[2])],
         mode="lines+markers",
         name="Vetor Tangente T",
-        line=dict(color=COLOR_TANGENT, width=6),
+        line=dict(color=COLOR_TANGENT, width=_LIGHT_TRACES["tangent"]["width"]),
         marker=dict(size=[0, 8], color=COLOR_TANGENT),
         hovertemplate="<b>Vetor Tangente T</b><extra></extra>",
     )
@@ -244,7 +403,7 @@ def _build_apparatus_traces(
         z=[float(P[2]), float(P[2] + L_vec * N[2])],
         mode="lines+markers",
         name="Vetor Normal N",
-        line=dict(color=COLOR_NORMAL, width=6),
+        line=dict(color=COLOR_NORMAL, width=_LIGHT_TRACES["normal"]["width"]),
         marker=dict(size=[0, 8], color=COLOR_NORMAL),
         hovertemplate="<b>Vetor Normal N</b><extra></extra>",
     )
@@ -255,7 +414,7 @@ def _build_apparatus_traces(
         z=[float(P[2]), float(P[2] + L_vec * B[2])],
         mode="lines+markers",
         name="Vetor Binormal B",
-        line=dict(color=COLOR_BINORMAL, width=6),
+        line=dict(color=COLOR_BINORMAL, width=_LIGHT_TRACES["binormal"]["width"]),
         marker=dict(size=[0, 8], color=COLOR_BINORMAL),
         visible="legendonly" if is_planar else True,
         hovertemplate="<b>Vetor Binormal B</b><extra></extra>",
@@ -267,7 +426,8 @@ def _build_apparatus_traces(
         z=lt_z,
         mode="lines",
         name="Reta Tangente L_T",
-        line=dict(color=COLOR_LT_LINE, width=2.5, dash="dash"),
+        opacity=_LIGHT_TRACES["tangent_line"]["opacity"],
+        line=dict(color=COLOR_LT_LINE, width=_LIGHT_TRACES["tangent_line"]["width"], dash="dash"),
         hovertemplate="<b>Reta Tangente L_T</b><extra></extra>",
     )
     # Trace 6: Plano Osculador (T, N)
@@ -279,7 +439,7 @@ def _build_apparatus_traces(
         j=_QUAD_J,
         k=_QUAD_K,
         color=COLOR_PLANE_OSC,
-        opacity=0.22,
+        opacity=_OPACITY_PLANE_OSC,
         flatshading=True,
         name="Plano Osculador (T, N)",
         showlegend=True,
@@ -294,7 +454,7 @@ def _build_apparatus_traces(
         j=_QUAD_J,
         k=_QUAD_K,
         color=COLOR_PLANE_NORM,
-        opacity=0.18,
+        opacity=_OPACITY_PLANE_NORM,
         flatshading=True,
         name="Plano Normal (N, B)",
         visible="legendonly" if is_planar else True,
@@ -310,7 +470,7 @@ def _build_apparatus_traces(
         j=_QUAD_J,
         k=_QUAD_K,
         color=COLOR_PLANE_RECT,
-        opacity=0.18,
+        opacity=_OPACITY_PLANE_RECT,
         flatshading=True,
         name="Plano Retificante (T, B)",
         visible="legendonly" if is_planar else True,
@@ -324,11 +484,59 @@ def _build_apparatus_traces(
         z=cz,
         mode="lines",
         name="Círculo Osculador",
-        line=dict(color=COLOR_CIRCLE, width=3.5),
+        line=dict(color=COLOR_CIRCLE, width=_LIGHT_TRACES["osculating_circle"]["width"]),
         hovertemplate="<b>Círculo Osculador</b><extra></extra>",
     )
 
     return [t1, t2, t3, t4, t5, t6, t7, t8, t9]
+
+
+def _build_associated_curve_traces(
+    r: np.ndarray,
+    T_mat: np.ndarray,
+    N_mat: np.ndarray,
+    kappa: np.ndarray,
+    s: np.ndarray,
+    span: float,
+    dims: int,
+) -> list[go.Scatter | go.Scatter3d]:
+    """
+    Build the static evolute E(s) = r + N/kappa (dashed) and involute
+    I(s) = r + (s1 - s) T (dotted) traces, over the whole parameter range.
+
+    Evolute points where the curvature radius exceeds 10x the curve extent are
+    dropped (None) so a vanishing curvature does not blow up the plot.
+    """
+    safe_k = np.where(np.abs(kappa) > 1e-5, kappa, np.nan)
+    rho_signed = 1.0 / safe_k
+    ok = np.isfinite(rho_signed) & (np.abs(rho_signed) <= 10.0 * span)
+    evo = r[:dims, :] + rho_signed[None, :] * N_mat[:dims, :]
+    inv = r[:dims, :] + (s[-1] - s)[None, :] * T_mat[:dims, :]
+
+    def column(arr: np.ndarray, k: int, mask: np.ndarray | None) -> list[float | None]:
+        return [
+            float(v) if (mask is None or mask[j]) else None
+            for j, v in enumerate(arr[k, :])
+        ]
+
+    cls = go.Scatter if dims == 2 else go.Scatter3d
+    traces = []
+    for name, role, arr, mask in (
+        ("Evoluta E(s)", "evolute", evo, ok),
+        ("Involuta I(s)", "involute", inv, None),
+    ):
+        spec = _LIGHT_TRACES[role]
+        coords = {axis: column(arr, k, mask) for k, axis in enumerate("xyz"[:dims])}
+        traces.append(
+            cls(
+                **coords,
+                mode="lines",
+                name=name,
+                line=dict(color=spec["color"], width=spec["width"], dash="solid"),
+                hovertemplate=f"<b>{name}</b><extra></extra>",
+            )
+        )
+    return traces
 
 
 def _compute_circle_coords_2d(
@@ -405,7 +613,12 @@ def _build_apparatus_traces_2d(
         y=[float(P[1])],
         mode="markers",
         name="Ponto Ativo r(s)",
-        marker=dict(size=10, color=COLOR_POINT, symbol="circle"),
+        marker=dict(
+            size=_POINT_SIZE_2D,
+            color=COLOR_POINT,
+            symbol="circle",
+            line=dict(color=COLOR_POINT_OUTLINE, width=2),
+        ),
         hovertemplate="<b>Ponto Ativo r(s)</b><br>x: %{x:.3f}<br>y: %{y:.3f}<extra></extra>",
     )
     # Trace 2: Vetor Tangente T
@@ -414,7 +627,7 @@ def _build_apparatus_traces_2d(
         y=[float(P[1]), float(P[1] + L_vec * T[1])],
         mode="lines+markers",
         name="Vetor Tangente T",
-        line=dict(color=COLOR_TANGENT, width=5),
+        line=dict(color=COLOR_TANGENT, width=_LIGHT_TRACES["tangent"]["width"]),
         marker=dict(size=[0, 8], color=COLOR_TANGENT),
         hovertemplate="<b>Vetor Tangente T</b><extra></extra>",
     )
@@ -424,7 +637,7 @@ def _build_apparatus_traces_2d(
         y=[float(P[1]), float(P[1] + L_vec * N[1])],
         mode="lines+markers",
         name="Vetor Normal N",
-        line=dict(color=COLOR_NORMAL, width=5),
+        line=dict(color=COLOR_NORMAL, width=_LIGHT_TRACES["normal"]["width"]),
         marker=dict(size=[0, 8], color=COLOR_NORMAL),
         hovertemplate="<b>Vetor Normal N</b><extra></extra>",
     )
@@ -434,7 +647,8 @@ def _build_apparatus_traces_2d(
         y=lt_y,
         mode="lines",
         name="Reta Tangente L_T",
-        line=dict(color=COLOR_LT_LINE, width=2, dash="dash"),
+        opacity=_LIGHT_TRACES["tangent_line"]["opacity"],
+        line=dict(color=COLOR_LT_LINE, width=_LIGHT_TRACES["tangent_line"]["width"], dash="dash"),
         hovertemplate="<b>Reta Tangente L_T</b><extra></extra>",
     )
     # Trace 5: Reta Normal L_N
@@ -443,7 +657,8 @@ def _build_apparatus_traces_2d(
         y=ln_y,
         mode="lines",
         name="Reta Normal L_N",
-        line=dict(color=COLOR_LN_LINE, width=2, dash="dot"),
+        opacity=_LIGHT_TRACES["normal_line"]["opacity"],
+        line=dict(color=COLOR_LN_LINE, width=_LIGHT_TRACES["normal_line"]["width"], dash="dash"),
         hovertemplate="<b>Reta Normal L_N</b><extra></extra>",
     )
     # Trace 6: Círculo Osculador
@@ -452,7 +667,7 @@ def _build_apparatus_traces_2d(
         y=cy,
         mode="lines",
         name="Círculo Osculador",
-        line=dict(color=COLOR_CIRCLE, width=3),
+        line=dict(color=COLOR_CIRCLE, width=_LIGHT_TRACES["osculating_circle"]["width"]),
         hovertemplate="<b>Círculo Osculador</b><extra></extra>",
     )
 
@@ -464,6 +679,9 @@ def _build_planar_2d_figure(
 ) -> go.Figure:
     """
     Construct a pure 2D interactive Plotly figure for planar curves (tau == 0).
+
+    The figure carries no title of its own (the viewer sidebar does); ``title`` is
+    accepted for API compatibility.
     """
     s = np.asarray(curve_data.s, dtype=float)
     N_pts = len(s)
@@ -504,7 +722,7 @@ def _build_planar_2d_figure(
         y=r[1, :].tolist(),
         mode="lines+markers",
         name="Curva r(s)",
-        line=dict(color=COLOR_CURVE, width=3.5),
+        line=dict(color=COLOR_CURVE, width=_LIGHT_TRACES["curve"]["width"]),
         marker=dict(size=3, color=COLOR_CURVE),
         customdata=customdata,
         hovertemplate=(
@@ -528,11 +746,16 @@ def _build_planar_2d_figure(
         is_initial=True,
     )
 
-    fig_data = [trace_curve, *init_apparatus]
+    fig_data = [
+        trace_curve,
+        *init_apparatus,
+        *_build_associated_curve_traces(r, T_mat, N_mat, kappa, s, span, 2),
+    ]
 
     frames: list[go.Frame] = []
     slider_steps: list[dict[str, Any]] = []
     hud_metrics: list[dict[str, Any]] = []
+    assoc = _associated_curve_invariants(curve_data, True)
 
     for f_idx in range(M_frames):
         pt_idx = int(frame_indices[f_idx])
@@ -578,6 +801,7 @@ def _build_planar_2d_figure(
                 "Ix": Ix_val,
                 "Iy": Iy_val,
                 "Iz": 0.0,
+                **{key: _opt_float(assoc[key], pt_idx) for key in _ASSOC_KEYS},
             }
         )
 
@@ -624,18 +848,16 @@ def _build_planar_2d_figure(
                 "prefix": "s = ",
                 "visible": True,
                 "xanchor": "center",
-                "font": {"size": 13, "color": "#2563eb"},
+                "font": {"size": 13, "color": COLOR_CURVE},
             },
             steps=slider_steps,
             pad={"b": 10, "t": 20},
             len=0.88,
             x=0.06,
             y=0.03,
-            tickcolor="#64748b",
-            font={"color": "#64748b", "size": 10},
-            bgcolor="rgba(241, 245, 249, 0.6)",
-            activebgcolor="#2563eb",
-            bordercolor="rgba(0, 0, 0, 0.1)",
+            tickcolor=_LIGHT_LAYOUT["font"]["color"],
+            font={"color": _LIGHT_LAYOUT["font"]["color"], "size": 10},
+            activebgcolor=COLOR_CURVE,
             borderwidth=1,
         )
     ]
@@ -649,9 +871,7 @@ def _build_planar_2d_figure(
         xanchor="left",
         yanchor="top",
         pad={"r": 10, "t": 10},
-        bgcolor="rgba(241, 245, 249, 0.7)",
-        bordercolor="rgba(0, 0, 0, 0.15)",
-        font={"color": "#0f172a", "size": 12},
+        font={"color": _LIGHT_LAYOUT["hoverlabel"]["font"]["color"], "size": 12},
         buttons=[
             dict(
                 label="▶ Play",
@@ -680,12 +900,6 @@ def _build_planar_2d_figure(
             ),
         ],
     )
-
-    class_title = _CLASS_DISPLAY_NAMES.get(
-        curve_data.classification,
-        curve_data.classification.replace("_", " ").title(),
-    )
-    final_title = title or f"Teorema Fundamental das Curvas Planas — {class_title} (2D)"
 
     # Stable 2D bounding box covering the entire curve plus apparatus
     x_min_c, x_max_c = float(np.min(r[0, :])), float(np.max(r[0, :]))
@@ -717,41 +931,29 @@ def _build_planar_2d_figure(
 
     fig = go.Figure(data=fig_data, frames=frames)
     fig.update_layout(
-        title=dict(
-            text=final_title,
-            font=dict(color="#0f172a", size=14),
-            x=0.5,
-            y=0.98,
-            xanchor="center",
-        ),
+        **_themed_base_layout(),
         uirevision="constant",
         xaxis=dict(
             title="X",
             range=x_range,
             autorange=False,
             uirevision="constant",
-            color="#64748b",
-            gridcolor="rgba(0, 0, 0, 0.06)",
-            zerolinecolor="rgba(0, 0, 0, 0.15)",
             showgrid=True,
             zeroline=True,
+            **{k: v for k, v in _LIGHT_LAYOUT["xaxis_2d"].items() if not k.startswith("scale")},
         ),
         yaxis=dict(
             title="Y",
             range=y_range,
             autorange=False,
             uirevision="constant",
-            color="#64748b",
-            gridcolor="rgba(0, 0, 0, 0.06)",
-            zerolinecolor="rgba(0, 0, 0, 0.15)",
             showgrid=True,
             zeroline=True,
-            scaleanchor="x",
+            scaleanchor="x",  # isotropic 1:1 scale
             scaleratio=1,
+            **_LIGHT_LAYOUT["yaxis_2d"],
         ),
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
-        margin=dict(l=45, r=25, t=35, b=45),
+        margin=dict(l=45, r=25, t=20, b=_DOCK_CLEARANCE),
         showlegend=False,
         sliders=sliders,
         updatemenus=[play_pause_menu],
@@ -854,7 +1056,7 @@ def _build_spatial_3d_figure(
         z=r[2, :].tolist(),
         mode="lines+markers",
         name="Curva r(s)",
-        line=dict(color=COLOR_CURVE, width=4),
+        line=dict(color=COLOR_CURVE, width=_LIGHT_TRACES["curve"]["width"]),
         marker=dict(size=3, color=COLOR_CURVE),
         customdata=customdata,
         hovertemplate=(
@@ -885,12 +1087,14 @@ def _build_spatial_3d_figure(
     )
 
     # Initial data: Trace 0 + Traces 1..9
-    fig_data = [trace_curve, *init_apparatus]
+    assoc_traces = _build_associated_curve_traces(r, T_mat, N_mat, kappa, s, span, 3)
+    fig_data = [trace_curve, *init_apparatus, *assoc_traces]
 
     # Build animation frames (selective update of traces 1..9)
     frames: list[go.Frame] = []
     slider_steps: list[dict[str, Any]] = []
     hud_metrics: list[dict[str, Any]] = []
+    assoc = _associated_curve_invariants(curve_data, is_planar)
 
     for f_idx in range(M_frames):
         pt_idx = int(frame_indices[f_idx])
@@ -942,6 +1146,7 @@ def _build_spatial_3d_figure(
                 "Ix": Ix_val,
                 "Iy": Iy_val,
                 "Iz": Iz_val,
+                **{key: _opt_float(assoc[key], pt_idx) for key in _ASSOC_KEYS},
             }
         )
 
@@ -993,18 +1198,16 @@ def _build_spatial_3d_figure(
                 "prefix": "s = ",
                 "visible": True,
                 "xanchor": "center",
-                "font": {"size": 13, "color": "#2563eb"},
+                "font": {"size": 13, "color": COLOR_CURVE},
             },
             steps=slider_steps,
             pad={"b": 10, "t": 20},
             len=0.88,
             x=0.06,
             y=0.03,
-            tickcolor="#64748b",
-            font={"color": "#64748b", "size": 10},
-            bgcolor="rgba(241, 245, 249, 0.6)",
-            activebgcolor="#2563eb",
-            bordercolor="rgba(0, 0, 0, 0.1)",
+            tickcolor=_LIGHT_LAYOUT["font"]["color"],
+            font={"color": _LIGHT_LAYOUT["font"]["color"], "size": 10},
+            activebgcolor=COLOR_CURVE,
             borderwidth=1,
         )
     ]
@@ -1019,9 +1222,7 @@ def _build_spatial_3d_figure(
         xanchor="left",
         yanchor="top",
         pad={"r": 10, "t": 10},
-        bgcolor="rgba(241, 245, 249, 0.7)",
-        bordercolor="rgba(0, 0, 0, 0.15)",
-        font={"color": "#0f172a", "size": 12},
+        font={"color": _LIGHT_LAYOUT["hoverlabel"]["font"]["color"], "size": 12},
         buttons=[
             dict(
                 label="▶ Play",
@@ -1059,9 +1260,7 @@ def _build_spatial_3d_figure(
         y=0.98,
         xanchor="right",
         yanchor="top",
-        bgcolor="rgba(241, 245, 249, 0.7)",
-        bordercolor="rgba(0, 0, 0, 0.15)",
-        font={"color": "#0f172a", "size": 11},
+        font={"color": _LIGHT_LAYOUT["hoverlabel"]["font"]["color"], "size": 11},
         buttons=[
             dict(
                 label="Vista 3D",
@@ -1108,12 +1307,6 @@ def _build_spatial_3d_figure(
             center=dict(x=0, y=0, z=0),
         )
 
-    class_title = _CLASS_DISPLAY_NAMES.get(
-        curve_data.classification,
-        curve_data.classification.replace("_", " ").title(),
-    )
-    final_title = title or f"Teorema Fundamental de Curvas — {class_title}"
-
     # Stable 3D bounding box covering the entire curve plus apparatus
     x_min_c, x_max_c = float(np.min(r[0, :])), float(np.max(r[0, :]))
     y_min_c, y_max_c = float(np.min(r[1, :])), float(np.max(r[1, :]))
@@ -1132,21 +1325,32 @@ def _build_spatial_3d_figure(
             init_ys.extend([float(c0[1] - rho0), float(c0[1] + rho0)])
             init_zs.extend([float(c0[2] - rho0), float(c0[2] + rho0)])
 
-    x_min_all = min(init_xs)
-    x_max_all = max(init_xs)
-    y_min_all = min(init_ys)
-    y_max_all = max(init_ys)
-    z_min_all = min(init_zs)
-    z_max_all = max(init_zs)
+    def _box(xs: list[float], ys: list[float], zs: list[float]) -> tuple[list[float], float]:
+        """Midpoints and largest side of the axis-aligned box around the given values."""
+        sides = [(min(v), max(v)) for v in (xs, ys, zs)]
+        return (
+            [0.5 * (lo + hi) for lo, hi in sides],
+            max(max(hi - lo for lo, hi in sides), 0.1),
+        )
 
-    span_x = x_max_all - x_min_all
-    span_y = y_max_all - y_min_all
-    span_z = z_max_all - z_min_all
-    max_span = max(span_x, span_y, span_z, 0.1)
+    base_mid, base_span = _box(init_xs, init_ys, init_zs)
+
+    # The 3D box cannot be panned or zoomed open (zoom only moves the camera), so it must
+    # contain the evolute and involute or Plotly clips them at its walls. A long interval
+    # makes the involute huge, though, and would shrink the curve to a speck, so the box
+    # grows to fit them only up to _ASSOC_BOX_MAX_FACTOR times the curve's own box.
+    for trace in assoc_traces:
+        for coords, axis_vals in zip((trace.x, trace.y, trace.z), (init_xs, init_ys, init_zs)):
+            finite = [v for v in coords if v is not None]
+            if finite:
+                axis_vals.extend([min(finite), max(finite)])
+    full_mid, full_span = _box(init_xs, init_ys, init_zs)
+    if full_span <= _ASSOC_BOX_MAX_FACTOR * base_span:
+        (x_mid, y_mid, z_mid), max_span = full_mid, full_span
+    else:
+        (x_mid, y_mid, z_mid), max_span = base_mid, _ASSOC_BOX_MAX_FACTOR * base_span
+
     pad = 0.15 * max_span
-    x_mid = 0.5 * (x_min_all + x_max_all)
-    y_mid = 0.5 * (y_min_all + y_max_all)
-    z_mid = 0.5 * (z_min_all + z_max_all)
     half_len = 0.5 * max_span + pad
     x_range = [float(x_mid - half_len), float(x_mid + half_len)]
     y_range = [float(y_mid - half_len), float(y_mid + half_len)]
@@ -1154,52 +1358,18 @@ def _build_spatial_3d_figure(
 
     fig = go.Figure(data=fig_data, frames=frames)
     fig.update_layout(
-        title=dict(
-            text=final_title,
-            font=dict(color="#0f172a", size=14),
-            x=0.5,
-            y=0.98,
-            xanchor="center",
-        ),
+        **_themed_base_layout(),
         uirevision="constant",
         scene=dict(
             uirevision="constant",
             aspectmode="cube",
             camera=init_camera,
-            xaxis=dict(
-                title="X",
-                range=x_range,
-                autorange=False,
-                color="#64748b",
-                gridcolor="rgba(0, 0, 0, 0.08)",
-                zerolinecolor="rgba(0, 0, 0, 0.2)",
-                backgroundcolor="rgba(248, 250, 252, 0.5)",
-                showbackground=True,
-            ),
-            yaxis=dict(
-                title="Y",
-                range=y_range,
-                autorange=False,
-                color="#64748b",
-                gridcolor="rgba(0, 0, 0, 0.08)",
-                zerolinecolor="rgba(0, 0, 0, 0.2)",
-                backgroundcolor="rgba(248, 250, 252, 0.5)",
-                showbackground=True,
-            ),
-            zaxis=dict(
-                title="Z",
-                range=z_range,
-                autorange=False,
-                color="#64748b",
-                gridcolor="rgba(0, 0, 0, 0.08)",
-                zerolinecolor="rgba(0, 0, 0, 0.2)",
-                backgroundcolor="rgba(248, 250, 252, 0.5)",
-                showbackground=True,
-            ),
+            bgcolor=_LIGHT_LAYOUT["scene"]["bgcolor"],
+            xaxis=_themed_axis_3d("X", x_range),
+            yaxis=_themed_axis_3d("Y", y_range),
+            zaxis=_themed_axis_3d("Z", z_range),
         ),
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
-        margin=dict(l=0, r=0, t=20, b=0),
+        margin=dict(l=0, r=0, t=20, b=_DOCK_CLEARANCE_3D),
         showlegend=False,
         sliders=sliders,
         updatemenus=updatemenus,
@@ -1251,6 +1421,66 @@ def build_curve_figure(
     return _build_spatial_3d_figure(curve_data, title=title)
 
 
+def _clothoid_formulas(kappa_expr: str) -> dict[str, str]:
+    """
+    Closed-form formulas for the clothoid kappa(s) = c*s + d (theta(0) = 0, r(0) = 0).
+
+    With theta(s) = c s^2/2 + d s, completing the square gives
+        r(s) = R(phi0) * sqrt(pi/c) * (C(x(s)) - C(x0), S(x(s)) - S(x0)),
+    where C, S are the Fresnel integrals, x(s) = sqrt(c/pi) (s + d/c), x0 = x(0)
+    and phi0 = -d^2/(2c). For d = 0 this reduces to sqrt(pi/c) (C(x), S(x)).
+    """
+    s_sym = sp.Symbol("s")
+    try:
+        poly = sp.Poly(sp.sympify(kappa_expr), s_sym)
+        c = poly.coeff_monomial(s_sym)
+        d = poly.coeff_monomial(1)
+        if c == 0 or not (c.is_number and d.is_number):
+            raise ValueError
+    except Exception:
+        c = sp.Symbol("c", positive=True)
+        d = sp.Integer(0)
+        symbolic = True
+    else:
+        symbolic = False
+
+    kap_l = sp.latex(c * s_sym + d)
+    theta_l = sp.latex(c * s_sym**2 / 2 + d * s_sym)
+    pref_l = sp.latex(sp.sqrt(sp.pi / c))
+    # Definitions of the special functions used by r(s), shown as a second formula line.
+    curve_aux = (
+        r"C(x) = \int_0^x \cos\frac{\pi t^2}{2}\,dt,\quad S(x) = \int_0^x \sin\frac{\pi t^2}{2}\,dt"
+    )
+
+    if d == 0:
+        arg_l = sp.latex(sp.sqrt(c / sp.pi) * s_sym)
+        curve_r = (
+            rf"r(s) = {pref_l}\left( C\!\left({arg_l}\right),\, S\!\left({arg_l}\right) \right)"
+        )
+    else:
+        curve_aux += (
+            r",\quad R_\varphi = \begin{pmatrix} \cos\varphi & -\sin\varphi \\ \sin\varphi & \cos\varphi \end{pmatrix}"
+        )
+        arg_l = sp.latex(sp.sqrt(c / sp.pi) * (s_sym + d / c))
+        x0_l = sp.latex(sp.sqrt(c / sp.pi) * d / c)
+        phi_l = sp.latex(-d**2 / (2 * c))
+        curve_r = (
+            rf"r(s) = R_{{{phi_l}}}\, {pref_l}\left( C\!\left({arg_l}\right) - C\!\left({x0_l}\right),\,"
+            rf" S\!\left({arg_l}\right) - S\!\left({x0_l}\right) \right)"
+        )
+
+    return {
+        "curve_r": curve_r,
+        "curve_aux": curve_aux,
+        "vec_t": rf"T(s) = \left( \cos\left({theta_l}\right),\, \sin\left({theta_l}\right) \right)",
+        "vec_n": rf"N(s) = \left( -\sin\left({theta_l}\right),\, \cos\left({theta_l}\right) \right)",
+        "vec_b": "",
+        "evolute": rf"E(s) = r(s) + \frac{{1}}{{{kap_l}}} N(s)" if not symbolic else r"E(s) = r(s) + \frac{1}{c\,s} N(s)",
+        "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
+        "radii": rf"\rho(s) = \frac{{1}}{{|{kap_l}|}}, \quad \sigma(s) = \infty",
+    }
+
+
 def _build_curve_formulas(
     curve_res: CurveResult | None, is_planar: bool
 ) -> dict[str, str]:
@@ -1268,105 +1498,73 @@ def _build_curve_formulas(
     if cls == "circulo":
         return {
             "curve_r": r"r(s) = \left( \frac{\sin(\kappa s)}{\kappa},\, \frac{1 - \cos(\kappa s)}{\kappa} \right)",
-            "curve_desc": r"Círculo euclidiano no plano $\mathbb{R}^2$ de raio constante $R = 1/\kappa$.",
             "vec_t": r"T(s) = \left( \cos(\kappa s),\, \sin(\kappa s) \right) = \frac{dr}{ds}",
             "vec_n": r"N(s) = \left( -\sin(\kappa s),\, \cos(\kappa s) \right) = J \cdot T(s)",
             "vec_b": "",
             "evolute": r"E(s) = \left( 0,\, \frac{1}{\kappa} \right)",
-            "evolute_desc": r"A evoluta colapsa em um ponto fixo: o centro de curvatura da circunferência.",
             "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"Evolvente da circunferência gerada pelo desenrolamento de corda a partir de $s_1$.",
             "radii": r"\rho(s) = \frac{1}{\kappa} = R, \quad \sigma(s) = \infty",
         }
     elif cls == "reta":
         return {
             "curve_r": r"r(s) = r(s_0) + s\,T_0",
-            "curve_desc": r"Reta euclidiana gerada por curvatura identicamente nula ($\kappa \equiv 0$).",
             "vec_t": r"T(s) = T_0 = \text{const}",
             "vec_n": r"N(s) = N_0 = \text{const}",
             "vec_b": r"B(s) = B_0 = \text{const}" if not is_planar else "",
             "evolute": r"E(s) \to \infty",
-            "evolute_desc": r"Para retas ($\kappa = 0$), o raio de curvatura é infinito e a evoluta é imprópria.",
             "involute": r"I(s) = r(s_1) = \text{const}",
-            "involute_desc": r"A involuta da reta colapsa na extremidade final $r(s_1)$.",
             "radii": r"\rho(s) = \infty" + (r", \quad \sigma(s) = \infty" if not is_planar else ""),
         }
     elif cls == "helice_circular":
         return {
             "curve_r": r"r(s) = \left( \frac{\kappa}{\omega^2}\big(1 - \cos(\omega s)\big),\, \frac{\kappa}{\omega^2}\sin(\omega s),\, \frac{\tau}{\omega} s \right)",
-            "curve_desc": r"Hélice circular enrolada sobre cilindro de raio $R = \frac{\kappa}{\kappa^2 + \tau^2}$ e passo $P = \frac{2\pi\tau}{\kappa^2 + \tau^2}$, com $\omega = \sqrt{\kappa^2 + \tau^2}$.",
             "vec_t": r"T(s) = \left( \frac{\kappa}{\omega}\sin(\omega s),\, \frac{\kappa}{\omega}\cos(\omega s),\, \frac{\tau}{\omega} \right)",
             "vec_n": r"N(s) = \left( \cos(\omega s),\, -\sin(\omega s),\, 0 \right)",
             "vec_b": r"B(s) = \left( \frac{\tau}{\omega}\sin(\omega s),\, \frac{\tau}{\omega}\cos(\omega s),\, -\frac{\kappa}{\omega} \right)",
             "evolute": r"E(s) = r(s) + \frac{1}{\kappa} N(s)",
-            "evolute_desc": r"Evoluta da hélice é outra hélice circular coaxial com raio $R_E = \frac{\tau^2}{\kappa(\kappa^2 + \tau^2)}$.",
             "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"Involuta (evolvente) gerada pelo desenrolamento da curva espacial a partir de $s_1$.",
             "radii": r"\rho = \frac{1}{\kappa}, \quad \sigma = \frac{1}{\tau} \quad (\text{constantes})",
         }
     elif cls == "helice_cilindrica_geral":
         return {
             "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s T(u)\,du",
-            "curve_desc": r"Hélice cilíndrica geral satisfazendo o Teorema de Lancret: $\frac{\tau(s)}{\kappa(s)} = c = \text{const} \iff$ reta tangente forma ângulo constante com geratriz fixa.",
             "vec_t": r"T'(s) = \kappa(s) N(s), \quad \langle T(s), u_0 \rangle = \cos\alpha",
             "vec_n": r"N(s) = \frac{T'(s)}{\kappa(s)} = \frac{1}{\kappa(s)} \frac{dT}{ds}",
             "vec_b": r"B(s) = T(s) \times N(s)",
             "evolute": r"E(s) = r(s) + \frac{1}{\kappa(s)} N(s)",
-            "evolute_desc": r"Locus dos centros dos círculos osculadores no espaço.",
             "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"Involuta espacial cujas retas tangentes a $r(s)$ são normais a $I(s)$.",
             "radii": r"\rho(s) = \frac{1}{|\kappa(s)|}, \quad \sigma(s) = \frac{1}{|\tau(s)|}, \quad \frac{\sigma}{\rho} = \text{const}",
         }
     elif cls == "espiral_de_cornu":
-        return {
-            "curve_r": r"r(s) = \left( \int_0^s \cos\left(\frac{c u^2}{2}\right)du,\, \int_0^s \sin\left(\frac{c u^2}{2}\right)du \right)",
-            "curve_desc": r"Clotoide (Espiral de Cornu) com $\kappa(s) = c \cdot s$. O ângulo de direção cresce quadraticamente: $\theta(s) = \frac{c s^2}{2}$.",
-            "vec_t": r"T(s) = \left( \cos\left(\frac{c s^2}{2}\right),\, \sin\left(\frac{c s^2}{2}\right) \right)",
-            "vec_n": r"N(s) = \left( -\sin\left(\frac{c s^2}{2}\right),\, \cos\left(\frac{c s^2}{2}\right) \right)",
-            "vec_b": "",
-            "evolute": r"E(s) = r(s) + \frac{1}{c\,s} N(s)",
-            "evolute_desc": r"A evoluta da clotoide é o envelope das normais com raio $\rho(s) = \frac{1}{c\,s}$.",
-            "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"Involuta (evolvente) gerada pelo desenrolamento a partir de $s_1$.",
-            "radii": r"\rho(s) = \frac{1}{|c \cdot s|}, \quad \sigma(s) = \infty",
-        }
+        return _clothoid_formulas(kappa_expr)
     elif cls == "espiral_logaritmica":
         return {
             "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s (\cos\theta(u),\, \sin\theta(u))\,du",
-            "curve_desc": r"Espiral Logarítmica com $\kappa(s) = \frac{1}{a s + b}$ e raio $\rho(s) = |a s + b|$. Ângulo constante com o raio vetor.",
             "vec_t": r"T(s) = \left( \cos\theta(s),\, \sin\theta(s) \right), \quad \theta(s) = \int \kappa\,du",
             "vec_n": r"N(s) = \left( -\sin\theta(s),\, \cos\theta(s) \right)",
             "vec_b": "",
             "evolute": r"E(s) = r(s) + (a s + b) N(s)",
-            "evolute_desc": r"A evoluta de uma espiral logarítmica é outra espiral logarítmica congruente.",
             "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"A involuta da espiral logarítmica também é uma espiral logarítmica congruente.",
             "radii": r"\rho(s) = |a s + b|, \quad \sigma(s) = \infty",
         }
     elif is_planar:
         return {
             "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s (\cos\theta(u),\, \sin\theta(u))\,du",
-            "curve_desc": r"Curva plana integrada pelo Teorema Fundamental das Curvas Planas via ângulo de direção $\theta(s) = \int_{s_0}^s \kappa(u)\,du$.",
             "vec_t": r"T(s) = \left( \cos\theta(s),\, \sin\theta(s) \right) = \frac{dr}{ds}",
             "vec_n": r"N(s) = \left( -\sin\theta(s),\, \cos\theta(s) \right) = J \cdot T(s)",
             "vec_b": "",
             "evolute": r"E(s) = r(s) + \frac{1}{\kappa(s)} N(s)",
-            "evolute_desc": r"Evoluta: locus dos centros de curvatura e envelope de todas as retas normais.",
             "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"Involuta (evolvente): trajetória da extremidade de corda desenrolada a partir de $s_1$.",
             "radii": r"\rho(s) = \frac{1}{|\kappa(s)|}, \quad \sigma(s) = \infty",
         }
     else:
         return {
             "curve_r": r"r(s) = r(s_0) + \int_{s_0}^s T(u)\,du",
-            "curve_desc": r"Curva espacial $\mathbb{R}^3$ reconstruída pelo Teorema Fundamental integrando o sistema de Frenet-Serret em $\mathrm{SO}(3)$.",
             "vec_t": r"\frac{dT}{ds} = \kappa(s) N(s), \quad T(s) = \frac{dr}{ds}",
             "vec_n": r"\frac{dN}{ds} = -\kappa(s) T(s) + \tau(s) B(s)",
             "vec_b": r"\frac{dB}{ds} = -\tau(s) N(s), \quad B(s) = T(s) \times N(s)",
             "evolute": r"E(s) = r(s) + \frac{1}{\kappa(s)} N(s)",
-            "evolute_desc": r"Evoluta espacial: linha dos centros dos círculos osculadores no espaço tridimensional.",
             "involute": r"I(s) = r(s) + (s_1 - s) T(s)",
-            "involute_desc": r"Involuta espacial cujas retas tangentes a $r(s)$ são normais a $I(s)$.",
             "radii": r"\rho(s) = \frac{1}{|\kappa(s)|}, \quad \sigma(s) = \frac{1}{|\tau(s)|}",
         }
 
@@ -1431,17 +1629,15 @@ def export_interactive_html(
 
     if is_planar:
         mode_label = "2D"
-        dim_badge_style = "background: rgba(56, 189, 248, 0.2); color: #38bdf8;"
         init_pos_str = f"({init_x:.2f}, {init_y:.2f})"
-        init_t_str = "0.000 (Plana)"
-        hint_str = "Diedro de Frenet {T, N}, Retas Tangente/Normal e Círculo Osculador — clique na curva ou arraste o controle"
+        init_t_str = "0.000 (plana)"
+        hint_str = "Diedro de Frenet (T, N): clique na curva ou arraste o controle."
         page_title = title or f"Teorema Fundamental das Curvas Planas — {class_label} (2D)"
     else:
         mode_label = "3D"
-        dim_badge_style = "background: rgba(168, 85, 247, 0.2); color: #c084fc;"
         init_pos_str = f"({init_x:.2f}, {init_y:.2f}, {init_z:.2f})"
         init_t_str = f"{init_t:.3f}"
-        hint_str = "Triedro de Frenet {T, N, B}, Planos e Círculo Osculador — clique na curva ou arraste o controle"
+        hint_str = "Triedro de Frenet (T, N, B): clique na curva ou arraste o controle."
         page_title = title or f"Teorema Fundamental de Curvas — {class_label} (3D)"
 
     # Prepare HUD metrics JSON
@@ -1515,7 +1711,7 @@ def export_interactive_html(
             else f"({init_ex:.2f}, {init_ey:.2f}, {init_ez:.2f})"
         )
     else:
-        init_evo_str = "∞ (κ ≈ 0)"
+        init_evo_str = "—"
 
     if init_ix is not None and init_iy is not None:
         init_inv_str = (
@@ -1595,6 +1791,165 @@ def export_interactive_html(
         )
     switches_markup = "\n".join(switches_html)
 
+    formulas = _build_curve_formulas(curve_res, is_planar)
+
+    assoc_formulas: dict[str, list[str]] = {"evolute": [], "involute": []}
+    if getattr(curve_res, "classification", "") not in ("circulo", "reta"):
+        if is_planar:
+            assoc_formulas["evolute"] = [r"\kappa_E = \frac{\kappa^3}{|\kappa'|},\quad \tau_E = 0"]
+            assoc_formulas["involute"] = [r"\kappa_I = \frac{1}{s_1 - s},\quad \tau_I = 0"]
+        else:
+            assoc_formulas["evolute"] = [r"E'(s) = -\frac{\kappa'}{\kappa^2} N + \frac{\tau}{\kappa} B"]
+            assoc_formulas["involute"] = [
+                r"\kappa_I = \frac{\sqrt{\kappa^2 + \tau^2}}{(s_1 - s)\,\kappa},\quad "
+                r"\tau_I = \frac{\kappa\tau' - \kappa'\tau}{(s_1 - s)\,\kappa\,(\kappa^2 + \tau^2)}"
+            ]
+
+    def _formula(title: str, tag: str, tag_cls: str, math_id: str, tex: str, *aux: str) -> str:
+        aux_html = "".join(f'<div class="tf-formula-math">${a}$</div>' for a in aux if a)
+        return (
+            f'<div class="tf-formula">'
+            f'<div class="tf-formula-head"><span>{title}</span><span class="tf-tag {tag_cls}">{tag}</span></div>'
+            f'<div class="tf-formula-math" id="{math_id}">${tex}$</div>'
+            f"{aux_html}</div>"
+        )
+
+    binormal_formula_html = ""
+    sigma_hud_row = ""
+    if not is_planar:
+        binormal_formula_html = _formula(
+            "Vetor binormal", "B", "tf-tag--b", "math-vec-b", formulas["vec_b"]
+        )
+        sigma_hud_row = (
+            '<div class="tf-readout"><span class="tf-readout-label">Raio de torção <em>σ</em>(<em>s</em>)</span>'
+            f'<span class="tf-readout-value" id="hud-sigma">{init_sigma_str}</span></div>'
+        )
+
+    def _vecrow(tag: str, tag_cls: str, elem_id: str, comps: list[float]) -> str:
+        val = "(" + ", ".join(f"{c:.3f}" for c in comps) + ")"
+        return (
+            f'<div class="tf-vecrow"><span class="tf-tag {tag_cls}">{tag}</span>'
+            f'<span class="tf-readout-value" id="{elem_id}">{val}</span></div>'
+        )
+
+    if is_planar:
+        vec_html = (
+            _vecrow("T", "tf-tag--t", "hud-vec-t", [init_tx, init_ty])
+            + _vecrow("N", "tf-tag--n", "hud-vec-n", [init_nx, init_ny])
+        )
+        # (label, dot class, trace index, visible by default)
+        switches = [
+            ("Curva r(s)", "", 0, True),
+            ("Ponto ativo r(s)", "tf-dot--p", 1, True),
+            ("Vetor tangente T", "tf-dot--t", 2, True),
+            ("Vetor normal N", "tf-dot--n", 3, True),
+            ("Reta tangente L_T", "tf-dot--t", 4, True),
+            ("Reta normal L_N", "tf-dot--n", 5, True),
+            ("Círculo osculador", "tf-dot--p", 6, True),
+            ("Evoluta E(s)", "tf-dot--e", 7, True),
+            ("Involuta I(s)", "tf-dot--i", 8, True),
+        ]
+        legend_items = [
+            ("", "r(s)"), ("tf-dot--t", "T"), ("tf-dot--n", "N"), ("tf-dot--p", "círculo osculador"),
+            ("tf-dot--e", "evoluta"), ("tf-dot--i", "involuta"),
+        ]
+        theory_summary = (
+            r"Pelo <b>Teorema Fundamental das Curvas Planas</b>, a curvatura com sinal "
+            r"$\kappa(s)$ determina a curva de modo único a menos de rotações e translações "
+            r"no plano $\mathbb{R}^2$. A reconstrução é calculada diretamente pelo ângulo "
+            r"tangente $\theta(s) = \int_{s_0}^s \kappa(u)\,du$ via quadratura direta."
+        )
+    else:
+        vec_html = (
+            _vecrow("T", "tf-tag--t", "hud-vec-t", [init_tx, init_ty, init_tz])
+            + _vecrow("N", "tf-tag--n", "hud-vec-n", [init_nx, init_ny, init_nz])
+            + _vecrow("B", "tf-tag--b", "hud-vec-b", [init_bx, init_by, init_bz])
+        )
+        # Planes take the hue of the vector they are perpendicular to.
+        switches = [
+            ("Curva r(s)", "", 0, True),
+            ("Ponto ativo r(s)", "tf-dot--p", 1, True),
+            ("Vetor tangente T", "tf-dot--t", 2, True),
+            ("Vetor normal N", "tf-dot--n", 3, True),
+            ("Vetor binormal B", "tf-dot--b", 4, not is_planar),
+            ("Reta tangente L_T", "tf-dot--t", 5, True),
+            ("Plano osculador (T, N)", "tf-dot--b", 6, True),
+            ("Plano normal (N, B)", "tf-dot--t", 7, not is_planar),
+            ("Plano retificante (T, B)", "tf-dot--n", 8, not is_planar),
+            ("Círculo osculador", "tf-dot--p", 9, True),
+            ("Evoluta E(s)", "tf-dot--e", 10, True),
+            ("Involuta I(s)", "tf-dot--i", 11, True),
+        ]
+        legend_items = [
+            ("", "r(s)"), ("tf-dot--t", "T"), ("tf-dot--n", "N"), ("tf-dot--b", "B"),
+            ("tf-dot--p", "círculo osculador"), ("tf-dot--e", "evoluta"), ("tf-dot--i", "involuta"),
+        ]
+        theory_summary = (
+            r"Pelo <b>Teorema Fundamental das Curvas no $\mathbb{R}^3$</b>, funções de curvatura "
+            r"$\kappa(s) > 0$ e torção $\tau(s)$ determinam a curva de modo único a menos "
+            r"de movimentos rígidos euclidianos ($\mathrm{SE}(3)$). A solução é integrada a partir "
+            r"do sistema diferencial linear de Frenet-Serret em $\mathrm{SO}(3)$."
+        )
+
+    switches_markup = "\n".join(
+        f'<label class="tf-toggle"><span class="tf-toggle-left"><span class="tf-dot {dot}"></span>{name}</span>'
+        f'<span class="tf-switch"><input type="checkbox" {"checked" if chk else ""} aria-label="{name}" '
+        f'onchange="toggleTraceVisibility({idx}, this.checked)"><span class="tf-switch-track"></span></span></label>'
+        for name, dot, idx, chk in switches
+    )
+    legend_markup = "".join(
+        f'<span><span class="tf-dot {dot}"></span>{label}</span>' for dot, label in legend_items
+    )
+
+    m0_assoc = hud_metrics[0] if hud_metrics else {}
+
+    def _assoc_value(key: str) -> str:
+        v = m0_assoc.get(key)
+        return "—" if v is None else f"{v:.3f}"
+
+    def _assoc_rho(key: str) -> str:
+        v = m0_assoc.get(key)
+        if v is None:
+            return "—"
+        return "∞" if abs(v) < 1e-5 else f"{1.0 / abs(v):.3f}"
+
+    def _assoc_block(tag: str, tag_cls: str, name: str, suffix: str, pos_id: str, pos_str: str) -> str:
+        torsion_init = "0.000 (plana)" if is_planar else _assoc_value(f"t{suffix}")
+        sigma_row = ""
+        if not is_planar:
+            sigma_row = (
+                f'<div class="tf-readout"><span class="tf-readout-label">Raio de torção <em>σ</em><sub>{tag}</sub></span>'
+                f'<span class="tf-readout-value" id="hud-sigma-{suffix.lower()}">{_assoc_rho(f"t{suffix}")}</span></div>'
+            )
+        return (
+            f'<div class="tf-vecrow"><span class="tf-tag {tag_cls}">{tag}</span>'
+            f'<span class="tf-readout-label">{name}</span></div>'
+            '<div class="tf-readouts">'
+            f'<div class="tf-readout"><span class="tf-readout-label">Posição <em>{tag}</em>(<em>s</em>)</span><span class="tf-readout-value" id="{pos_id}">{pos_str}</span></div>'
+            f'<div class="tf-readout"><span class="tf-readout-label">Curvatura <em>κ</em><sub>{tag}</sub></span><span class="tf-readout-value" id="hud-kappa-{suffix.lower()}">{_assoc_value(f"k{suffix}")}</span></div>'
+            f'<div class="tf-readout"><span class="tf-readout-label">Torção <em>τ</em><sub>{tag}</sub></span><span class="tf-readout-value" id="hud-tau-{suffix.lower()}">{torsion_init}</span></div>'
+            f'<div class="tf-readout"><span class="tf-readout-label">Raio de curvatura <em>ρ</em><sub>{tag}</sub></span><span class="tf-readout-value" id="hud-rho-{suffix.lower()}">{_assoc_rho(f"k{suffix}")}</span></div>'
+            f"{sigma_row}"
+            f'<div class="tf-readout"><span class="tf-readout-label">Rapidez |<em>{tag}</em>′(<em>s</em>)|</span><span class="tf-readout-value" id="hud-speed-{suffix.lower()}">{_assoc_value(f"v{suffix}")}</span></div>'
+            "</div>"
+        )
+
+    assoc_panel = _assoc_block("E", "tf-tag--e", "Evoluta", "E", "hud-evolute", init_evo_str) + _assoc_block(
+        "I", "tf-tag--i", "Involuta", "I", "hud-involute", init_inv_str
+    )
+
+    kappa_math = rf"$\kappa(s) = {kappa_tex}$"
+    tau_math = rf"$\tau(s) = {tau_tex}$"
+    interval_math = rf"$s \in [{s0:.2f}, {s1:.2f}]$"
+    subtitle = title or "Teorema Fundamental de Curvas"
+
+    theme_json = json.dumps(
+        {name: {"traces": t["traces"], "layout": t["layout"]} for name, t in _THEME.items()}
+    )
+    roles_json = json.dumps(_TRACE_ROLES_2D if is_planar else _TRACE_ROLES_3D)
+    tokens_css = _read_design_asset("tokens.css")
+    bundle_css = _read_design_asset("components/bundle.css")
+
     # Post-script JavaScript to inject inside Plotly.newPlot.then(...)
     post_script_js = f"""
 window.CURVE_METRICS = {metrics_json};
@@ -1603,7 +1958,14 @@ var totalFrames = {num_frames};
 var curFrame = 0;
 var isPlaying = false;
 var playTimer = null;
+var lastTick = null;
 var animSpeed = 1.0;
+var ICON_PLAY = '<path d="M4.5 2.6v10.8L13 8z"/>';
+var ICON_PAUSE = '<path d="M4 2.8h2.8v10.4H4zM9.2 2.8H12v10.4H9.2z"/>';
+var ICON_MOON = '<path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6z"/>';
+var ICON_SUN = '<circle cx="8" cy="8" r="2.6"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/>';
+var TRIEDRO_THEME = {theme_json};
+var TRACE_ROLES = {roles_json};
 
 function updateHUDMetrics(idx) {{
   if (!window.CURVE_METRICS || !window.CURVE_METRICS[idx]) return;
@@ -1628,7 +1990,7 @@ function updateHUDMetrics(idx) {{
   }}
   if (kElem) kElem.innerText = m.kappa.toFixed(3);
   if (tElem) {{
-    tElem.innerText = m.is_planar ? "0.000 (Plana)" : m.tau.toFixed(3);
+    tElem.innerText = m.is_planar ? "0.000 (plana)" : m.tau.toFixed(3);
   }}
   if (rhoElem) rhoElem.innerText = m.rho === null ? "∞" : m.rho.toFixed(3);
   if (sigElem && !m.is_planar) {{
@@ -1637,7 +1999,7 @@ function updateHUDMetrics(idx) {{
 
   if (evoElem) {{
     if (m.Ex === null || m.Ex === undefined) {{
-      evoElem.innerText = "∞ (κ ≈ 0)";
+      evoElem.innerText = "—";
     }} else if (m.is_planar) {{
       evoElem.innerText = "(" + m.Ex.toFixed(2) + ", " + m.Ey.toFixed(2) + ")";
     }} else {{
@@ -1655,22 +2017,38 @@ function updateHUDMetrics(idx) {{
     }}
   }}
 
+  // Evolute / involute as curves in their own right
+  function fmtOpt(v) {{ return v === null || v === undefined ? "\u2014" : v.toFixed(3); }}
+  function fmtRho(v) {{
+    if (v === null || v === undefined) return "\u2014";
+    return Math.abs(v) < 1e-5 ? "\u221e" : (1 / Math.abs(v)).toFixed(3);
+  }}
+  [["e", "E"], ["i", "I"]].forEach(function(p) {{
+    var sfx = p[0], up = p[1];
+    var set = function(id, txt) {{ var el = document.getElementById(id); if (el) el.innerText = txt; }};
+    set("hud-kappa-" + sfx, fmtOpt(m["k" + up]));
+    set("hud-tau-" + sfx, m.is_planar ? "0.000 (plana)" : fmtOpt(m["t" + up]));
+    set("hud-rho-" + sfx, fmtRho(m["k" + up]));
+    set("hud-sigma-" + sfx, fmtRho(m["t" + up]));
+    set("hud-speed-" + sfx, fmtOpt(m["v" + up]));
+  }});
+
   // Update vectors
   var vt = document.getElementById("hud-vec-t");
   var vn = document.getElementById("hud-vec-n");
   var vb = document.getElementById("hud-vec-b");
   if (vt && m.Tx !== undefined) {{
     vt.innerText = m.is_planar
-      ? "[" + m.Tx.toFixed(3) + ", " + m.Ty.toFixed(3) + "]"
-      : "[" + m.Tx.toFixed(3) + ", " + m.Ty.toFixed(3) + ", " + m.Tz.toFixed(3) + "]";
+      ? "(" + m.Tx.toFixed(3) + ", " + m.Ty.toFixed(3) + ")"
+      : "(" + m.Tx.toFixed(3) + ", " + m.Ty.toFixed(3) + ", " + m.Tz.toFixed(3) + ")";
   }}
   if (vn && m.Nx !== undefined) {{
     vn.innerText = m.is_planar
-      ? "[" + m.Nx.toFixed(3) + ", " + m.Ny.toFixed(3) + "]"
-      : "[" + m.Nx.toFixed(3) + ", " + m.Ny.toFixed(3) + ", " + m.Nz.toFixed(3) + "]";
+      ? "(" + m.Nx.toFixed(3) + ", " + m.Ny.toFixed(3) + ")"
+      : "(" + m.Nx.toFixed(3) + ", " + m.Ny.toFixed(3) + ", " + m.Nz.toFixed(3) + ")";
   }}
   if (vb && m.Bx !== undefined && !m.is_planar) {{
-    vb.innerText = "[" + m.Bx.toFixed(3) + ", " + m.By.toFixed(3) + ", " + m.Bz.toFixed(3) + "]";
+    vb.innerText = "(" + m.Bx.toFixed(3) + ", " + m.By.toFixed(3) + ", " + m.Bz.toFixed(3) + ")";
   }}
 
   // Update dock slider and readout
@@ -1685,20 +2063,78 @@ function updateHUDMetrics(idx) {{
   if (trackFill) trackFill.style.width = pct + "%";
 }}
 
+// Frame data (moving traces 1..n) indexed by frame name, read once from Plotly.
+var frameCache = null;
+function getFrameCache(gd) {{
+  if (frameCache) return frameCache;
+  var list = (gd._transitionData && gd._transitionData._frames) || [];
+  frameCache = {{}};
+  list.forEach(function(f) {{ frameCache[f.name] = f; }});
+  return frameCache;
+}}
+
+// Move the active point and apparatus with ONE lightweight restyle of the moving
+// traces. Plotly.animate + relayout redrew the whole scene on every tick, which kept
+// the main thread busy and rebuilt the scene under the cursor while dragging.
+function applyFrame(gd, idx) {{
+  var f = getFrameCache(gd)["frame_" + idx];
+  if (!f) {{
+    Plotly.animate(gd, ["frame_" + idx], {{
+      mode: "immediate",
+      frame: {{ duration: 0, redraw: !isPlanar }},
+      transition: {{ duration: 0 }}
+    }}).catch(function() {{}});
+    return;
+  }}
+  var upd = {{ x: [], y: [] }};
+  if (!isPlanar) upd.z = [];
+  f.data.forEach(function(tr) {{
+    upd.x.push(tr.x);
+    upd.y.push(tr.y);
+    if (!isPlanar) upd.z.push(tr.z);
+  }});
+  syncLiveView(gd);
+  Plotly.restyle(gd, upd, f.traces);
+}}
+
+// Every update re-applies the view stored in the layout (3D camera, 2D axis ranges), which
+// only changes on mouse-up; mid-drag that snapped the view back on each playback tick.
+// Copy the live view into the layout first so updates keep what the user is dragging.
+function syncLiveView(gd) {{
+  try {{
+    if (isPlanar) {{
+      ["xaxis", "yaxis"].forEach(function(k) {{
+        var ax = gd._fullLayout[k];
+        if (ax && ax.range) gd.layout[k].range = ax.range.slice();
+      }});
+    }} else {{
+      var scene = gd._fullLayout.scene._scene;
+      if (scene && scene.getCamera) gd.layout.scene.camera = scene.getCamera();
+    }}
+  }} catch (e) {{}}
+}}
+
 function goToFrame(frameIdx) {{
   var gd = document.getElementById("fundamental_curve_plot");
   if (!gd) return;
   frameIdx = Math.max(0, Math.min(totalFrames - 1, frameIdx));
   curFrame = frameIdx;
-  Plotly.animate(gd, ["frame_" + frameIdx], {{
-    mode: "immediate",
-    frame: {{ duration: 0, redraw: !isPlanar }},
-    transition: {{ duration: 0 }}
-  }});
-  Plotly.relayout(gd, {{
-    "sliders[0].active": frameIdx
-  }});
+  applyFrame(gd, frameIdx);
   updateHUDMetrics(frameIdx);
+}}
+
+// Playback advances by elapsed time (45 ms per frame at 1x) on requestAnimationFrame,
+// so a slow frame never queues extra work behind the user's drag.
+function playLoop(now) {{
+  if (!isPlaying) return;
+  if (lastTick === null) lastTick = now;
+  var stepMs = 45 / animSpeed;
+  var steps = Math.floor((now - lastTick) / stepMs);
+  if (steps >= 1) {{
+    lastTick += steps * stepMs;
+    goToFrame((curFrame + steps) % totalFrames);
+  }}
+  playTimer = requestAnimationFrame(playLoop);
 }}
 
 function togglePlay() {{
@@ -1706,19 +2142,16 @@ function togglePlay() {{
   var icon = document.getElementById("play-icon");
   if (isPlaying) {{
     isPlaying = false;
-    clearInterval(playTimer);
+    cancelAnimationFrame(playTimer);
     playTimer = null;
-    if (icon) icon.innerText = "▶";
+    if (icon) icon.innerHTML = ICON_PLAY;
     if (btn) btn.classList.remove("active");
   }} else {{
     isPlaying = true;
-    if (icon) icon.innerText = "⏸";
+    lastTick = null;
+    if (icon) icon.innerHTML = ICON_PAUSE;
     if (btn) btn.classList.add("active");
-    var intervalMs = Math.max(16, Math.round(45 / animSpeed));
-    playTimer = setInterval(function() {{
-      var next = (curFrame + 1) % totalFrames;
-      goToFrame(next);
-    }}, intervalMs);
+    playTimer = requestAnimationFrame(playLoop);
   }}
 }}
 
@@ -1727,15 +2160,7 @@ function setPlaybackSpeed(btn) {{
   var currIdx = speeds.indexOf(animSpeed);
   var nextIdx = (currIdx + 1) % speeds.length;
   animSpeed = speeds[nextIdx];
-  if (btn) btn.innerText = animSpeed + "x";
-  if (isPlaying) {{
-    clearInterval(playTimer);
-    var intervalMs = Math.max(16, Math.round(45 / animSpeed));
-    playTimer = setInterval(function() {{
-      var next = (curFrame + 1) % totalFrames;
-      goToFrame(next);
-    }}, intervalMs);
-  }}
+  if (btn) btn.innerText = animSpeed + "×";
 }}
 
 function toggleTraceVisibility(traceIdx, isVisible) {{
@@ -1743,48 +2168,84 @@ function toggleTraceVisibility(traceIdx, isVisible) {{
   if (!gd) return;
   Plotly.restyle(gd, {{ visible: isVisible ? true : "legendonly" }}, [traceIdx]);
 }}
+// This script runs inside Plotly's .then() closure; the switches' inline onchange
+// handlers can only see globals, so expose the function explicitly.
+window.toggleTraceVisibility = toggleTraceVisibility;
 
-function toggleTheme() {{
-  var currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-  var newTheme = currentTheme === "light" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", newTheme);
+function parseRGBA(c) {{
+  var m = /^rgba?\\(([^)]+)\\)$/.exec(c);
+  if (!m) return {{ color: c, alpha: 1 }};
+  var p = m[1].split(",").map(function(x) {{ return x.trim(); }});
+  return {{
+    color: "rgb(" + p[0] + ", " + p[1] + ", " + p[2] + ")",
+    alpha: p.length > 3 ? parseFloat(p[3]) : 1
+  }};
+}}
+
+function restyleRole(gd, idx, role, t) {{
+  var u = {{}};
+  if (role === "curve" || role === "tangent" || role === "normal" || role === "binormal") {{
+    u["line.color"] = t.color;
+    u["marker.color"] = t.color;
+  }} else if (role === "active_point") {{
+    u["marker.color"] = t.color;
+    u["marker.line.color"] = t.outline;
+  }} else if (role === "tangent_line" || role === "normal_line" || role === "osculating_circle" || role === "evolute" || role === "involute") {{
+    u["line.color"] = t.color;
+  }} else if (role.indexOf("plane_") === 0) {{
+    var c = parseRGBA(t.color);
+    u["color"] = c.color;
+    u["opacity"] = c.alpha;
+  }} else {{
+    return;
+  }}
+  Plotly.restyle(gd, u, [idx]);
+}}
+
+function applyTheme(name) {{
+  var th = TRIEDRO_THEME[name];
+  if (!th) return;
+  document.documentElement.setAttribute("data-theme", name);
   var icon = document.getElementById("theme-icon");
-  if (icon) icon.innerText = newTheme === "dark" ? "☀️" : "🌙";
+  if (icon) icon.innerHTML = name === "dark" ? ICON_SUN : ICON_MOON;
+  try {{ localStorage.setItem("triedro-theme", name); }} catch (e) {{}}
 
   var gd = document.getElementById("fundamental_curve_plot");
-  if (!gd) return;
-  var isDark = newTheme === "dark";
-  var bg = isDark ? "#090d16" : "#ffffff";
-  var grid = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
-  var zeroline = isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.15)";
-  var fontColor = isDark ? "#94a3b8" : "#64748b";
-
-  if (isPlanar) {{
-    Plotly.relayout(gd, {{
-      paper_bgcolor: bg,
-      plot_bgcolor: bg,
-      "xaxis.gridcolor": grid,
-      "xaxis.zerolinecolor": zeroline,
-      "xaxis.color": fontColor,
-      "yaxis.gridcolor": grid,
-      "yaxis.zerolinecolor": zeroline,
-      "yaxis.color": fontColor
-    }});
-  }} else {{
-    Plotly.relayout(gd, {{
-      paper_bgcolor: bg,
-      plot_bgcolor: bg,
-      "scene.xaxis.gridcolor": grid,
-      "scene.xaxis.backgroundcolor": isDark ? "rgba(11, 15, 25, 0.8)" : "rgba(248, 250, 252, 0.5)",
-      "scene.xaxis.color": fontColor,
-      "scene.yaxis.gridcolor": grid,
-      "scene.yaxis.backgroundcolor": isDark ? "rgba(11, 15, 25, 0.8)" : "rgba(248, 250, 252, 0.5)",
-      "scene.yaxis.color": fontColor,
-      "scene.zaxis.gridcolor": grid,
-      "scene.zaxis.backgroundcolor": isDark ? "rgba(11, 15, 25, 0.8)" : "rgba(248, 250, 252, 0.5)",
-      "scene.zaxis.color": fontColor
-    }});
+  if (!gd || !gd.data) return;
+  var L = th.layout;
+  var rel = {{
+    "font.color": L.font.color,
+    "hoverlabel.bgcolor": L.hoverlabel.bgcolor,
+    "hoverlabel.bordercolor": L.hoverlabel.bordercolor,
+    "hoverlabel.font.color": L.hoverlabel.font.color,
+    "modebar.color": L.modebar.color,
+    "modebar.activecolor": L.modebar.activecolor
+  }};
+  function axisUpdate(prefix, a) {{
+    rel[prefix + ".gridcolor"] = a.gridcolor;
+    rel[prefix + ".zerolinecolor"] = a.zerolinecolor;
+    rel[prefix + ".linecolor"] = a.linecolor;
+    rel[prefix + ".tickfont.color"] = a.tickfont.color;
   }}
+  if (isPlanar) {{
+    axisUpdate("xaxis", L.xaxis_2d);
+    axisUpdate("yaxis", L.yaxis_2d);
+  }} else {{
+    ["xaxis", "yaxis", "zaxis"].forEach(function(k) {{ axisUpdate("scene." + k, L.scene.axis); }});
+  }}
+  Plotly.relayout(gd, rel);
+  TRACE_ROLES.forEach(function(role, idx) {{ restyleRole(gd, idx, role, th.traces[role]); }});
+}}
+
+function toggleTheme() {{
+  var current = document.documentElement.getAttribute("data-theme") || "light";
+  applyTheme(current === "light" ? "dark" : "light");
+}}
+
+function restoreSavedTheme() {{
+  try {{
+    if (localStorage.getItem("triedro-theme") === "dark") applyTheme("dark");
+  }} catch (e) {{}}
 }}
 
 function toggleSidebar() {{
@@ -1868,20 +2329,22 @@ function initDockAndSidebar() {{
   var sbOpenBtn = document.getElementById("sidebar-expand-btn");
   if (sbOpenBtn) sbOpenBtn.addEventListener("click", toggleSidebar);
 
+  restoreSavedTheme();
+
   if (typeof renderAllKaTeX === "function") {{
     renderAllKaTeX();
   }} else if (window.renderMathInElement) {{
     renderMathInElement(document.body, {{
       delimiters: [
         {{ left: "$$", right: "$$", display: true }},
-        {{ left: "\\[", right: "\\]", display: true }},
-        {{ left: "$", right: "$", display: false }},
-        {{ left: "\\(", right: "\\)", display: false }}
+        {{ left: "$", right: "$", display: false }}
       ],
       throwOnError: false
     }});
   }}
 }}
+
+restoreSavedTheme();
 
 if (document.readyState === "loading") {{
   document.addEventListener("DOMContentLoaded", initDockAndSidebar);
@@ -1896,9 +2359,10 @@ if (document.readyState === "loading") {{
         full_html=False,
         div_id="fundamental_curve_plot",
         post_script=post_script_js,
+        auto_play=False,  # playback starts only from the dock's play button
     )
 
-    # Fullscreen responsive HTML template with Collapsible Sidebar, KaTeX & Dock
+    # Fullscreen responsive HTML template: Triedro design system (tokens + tf-* components)
     full_html = f"""<!DOCTYPE html>
 <html lang="pt-BR" data-theme="light">
 <head>
@@ -1909,15 +2373,15 @@ if (document.readyState === "loading") {{
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderAllKaTeX()"></script>
+  <!-- Copying a rendered formula yields its TeX source instead of one fragment per line -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/copy-tex.min.js"></script>
   <script>
     function renderAllKaTeX() {{
       if (typeof renderMathInElement === "function") {{
         renderMathInElement(document.body, {{
           delimiters: [
             {{ left: "$$", right: "$$", display: true }},
-            {{ left: "\\[", right: "\\]", display: true }},
-            {{ left: "$", right: "$", display: false }},
-            {{ left: "\\(", right: "\\)", display: false }}
+            {{ left: "$", right: "$", display: false }}
           ],
           throwOnError: false
         }});
@@ -1940,48 +2404,15 @@ if (document.readyState === "loading") {{
       }}
     }}, 80);
   </script>
+  <!-- Triedro design system: component classes (bundle.css) and theme tokens (tokens.css) -->
   <style>
-    * {{
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }}
-    :root, html[data-theme="light"] {{
-      --bg-app: #f8fafc;
-      --bg-canvas: #ffffff;
-      --bg-sidebar: #ffffff;
-      --text-title: #0f172a;
-      --text-body: #334155;
-      --text-muted: #64748b;
-      --border-ui: #e2e8f0;
-      --card-bg: #f8fafc;
-      --accent: #2563eb;
-      --accent-hover: #1d4ed8;
-      --dock-bg: rgba(255, 255, 255, 0.94);
-      --dock-border: rgba(0, 0, 0, 0.08);
-      --dock-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.10), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
-      --btn-bg: #f1f5f9;
-      --btn-hover: #e2e8f0;
-      --toggle-bg: #cbd5e1;
-    }}
-    html[data-theme="dark"] {{
-      --bg-app: #060911;
-      --bg-canvas: #090d16;
-      --bg-sidebar: #0f172a;
-      --text-title: #f8fafc;
-      --text-body: #cbd5e1;
-      --text-muted: #94a3b8;
-      --border-ui: rgba(255, 255, 255, 0.08);
-      --card-bg: #1e293b;
-      --accent: #38bdf8;
-      --accent-hover: #0284c7;
-      --dock-bg: rgba(15, 23, 42, 0.92);
-      --dock-border: rgba(255, 255, 255, 0.12);
-      --dock-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.6), 0 4px 12px -2px rgba(0, 0, 0, 0.4);
-      --btn-bg: #1e293b;
-      --btn-hover: #334155;
-      --toggle-bg: #475569;
-    }}
+{bundle_css}
+  </style>
+  <style>
+{tokens_css}
+  </style>
+  <style>
+    /* Page frame: full-viewport shell around the Triedro components */
     html, body {{
       width: 100vw;
       height: 100vh;
@@ -1989,10 +2420,8 @@ if (document.readyState === "loading") {{
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: var(--bg-app);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--canvas);
       user-select: none;
-      color: var(--text-body);
     }}
     #app-layout {{
       display: flex;
@@ -2003,339 +2432,14 @@ if (document.readyState === "loading") {{
       position: relative;
       overflow: hidden;
     }}
-    /* Collapsible Sidebar (Right Side) */
-    #sidebar {{
-      width: 360px;
-      min-width: 360px;
-      height: 100%;
-      background: var(--bg-sidebar);
-      border-left: 1px solid var(--border-ui);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-      transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 50;
-      box-shadow: -4px 0 24px rgba(0, 0, 0, 0.04);
-    }}
-    #sidebar.collapsed {{
-      margin-right: -360px;
-    }}
-    .sidebar-header {{
-      padding: 18px 20px 14px 20px;
-      border-bottom: 1px solid var(--border-ui);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }}
-    .sidebar-title-row {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }}
-    .sidebar-title-group {{
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }}
-    .brand-icon {{
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--accent);
-      background: rgba(37, 99, 235, 0.1);
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-    }}
-    .sidebar-title {{
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-title);
-      letter-spacing: -0.2px;
-    }}
-    .header-actions {{
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }}
-    .icon-btn {{
-      background: var(--btn-bg);
-      border: 1px solid var(--border-ui);
-      border-radius: 6px;
-      width: 30px;
-      height: 30px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: var(--text-title);
-      font-size: 13px;
-      transition: background 0.15s ease, transform 0.1s ease;
-    }}
-    .icon-btn:hover {{
-      background: var(--btn-hover);
-    }}
-    .header-badges {{
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }}
-    .hud-badge {{
-      font-size: 11px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 5px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }}
-    .badge-class {{
-      background: rgba(37, 99, 235, 0.12);
-      color: var(--accent);
-    }}
-    .badge-dim {{
-      {dim_badge_style}
-    }}
-
-    /* Scrollable HUD Container inside Sidebar (Preserving id="hud-card") */
-    #hud-card {{
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }}
-    #hud-card::-webkit-scrollbar {{
-      width: 5px;
-    }}
-    #hud-card::-webkit-scrollbar-thumb {{
-      background: var(--border-ui);
-      border-radius: 3px;
-    }}
-    .card-section {{
-      background: var(--card-bg);
-      border: 1px solid var(--border-ui);
-      border-radius: 10px;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }}
-    .section-title {{
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: var(--text-muted);
-    }}
-    .math-box {{
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 13px;
-    }}
-    .math-row {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 2px 0;
-    }}
-    .math-label {{
-      color: var(--text-muted);
-      font-size: 12px;
-    }}
-    .math-expr {{
-      font-weight: 600;
-      color: var(--text-title);
-    }}
-    .formula-card {{
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }}
-    .formula-row {{
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      padding: 6px 8px;
-      background: rgba(0, 0, 0, 0.02);
-      border-radius: 6px;
-      border-left: 3px solid var(--accent);
-    }}
-    html[data-theme="dark"] .formula-row {{
-      background: rgba(255, 255, 255, 0.03);
-    }}
-    .formula-title {{
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }}
-    .formula-badge {{
-      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 1px 6px;
-      border-radius: 4px;
-      background: rgba(37, 99, 235, 0.1);
-      color: var(--accent);
-    }}
-    .badge-t {{ background: rgba(16, 185, 129, 0.15); color: #10b981; }}
-    .badge-n {{ background: rgba(239, 68, 68, 0.15); color: #ef4444; }}
-    .badge-b {{ background: rgba(99, 102, 241, 0.15); color: #6366f1; }}
-    .badge-evo {{ background: rgba(245, 158, 11, 0.15); color: #d97706; }}
-    .badge-inv {{ background: rgba(168, 85, 247, 0.15); color: #9333ea; }}
-    .formula-math {{
-      font-size: 13px;
-      color: var(--text-title);
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 2px 0;
-    }}
-    .formula-desc {{
-      font-size: 10px;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }}
-    .hud-grid {{
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }}
-    .hud-row {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
-      padding: 2px 0;
-    }}
-    .hud-label {{
-      color: var(--text-muted);
-    }}
-    #hud-s, #hud-r, #hud-kappa, #hud-tau, #hud-rho, .hud-value {{
-      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-      font-weight: 600;
-      color: var(--text-title);
-    }}
-    .hud-vectors {{
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-top: 6px;
-      padding-top: 8px;
-      border-top: 1px solid var(--border-ui);
-    }}
-    .vec-item {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-    }}
-    .vec-tag {{
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      font-weight: 700;
-      font-size: 11px;
-    }}
-    .vec-t {{ background: rgba(16, 185, 129, 0.15); color: #10b981; }}
-    .vec-n {{ background: rgba(239, 68, 68, 0.15); color: #ef4444; }}
-    .vec-b {{ background: rgba(99, 102, 241, 0.15); color: #6366f1; }}
-    .vec-val {{
-      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-      font-weight: 500;
-      color: var(--text-body);
-    }}
-    .toggles-list {{
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }}
-    .switch-row {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 0;
-      cursor: pointer;
-    }}
-    .switch-left {{
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }}
-    .color-badge {{
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }}
-    .switch-name {{
-      font-size: 12px;
-      color: var(--text-body);
-    }}
-    .toggle-wrap {{
-      position: relative;
-      width: 32px;
-      height: 18px;
-    }}
-    .toggle-wrap input {{
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }}
-    .toggle-slider {{
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: var(--toggle-bg);
-      transition: .2s;
-      border-radius: 18px;
-    }}
-    .toggle-slider:before {{
-      position: absolute;
-      content: "";
-      height: 14px;
-      width: 14px;
-      left: 2px;
-      bottom: 2px;
-      background-color: white;
-      transition: .2s;
-      border-radius: 50%;
-    }}
-    .toggle-wrap input:checked + .toggle-slider {{
-      background-color: var(--accent);
-    }}
-    .toggle-wrap input:checked + .toggle-slider:before {{
-      transform: translateX(14px);
-    }}
-    .theory-text {{
-      font-size: 11px;
-      line-height: 1.5;
-      color: var(--text-muted);
-    }}
-    .hud-hint {{
-      margin-top: 6px;
-      font-size: 11px;
-      color: var(--text-muted);
-      border-top: 1px solid var(--border-ui);
-      padding-top: 6px;
-    }}
-
-    /* Main Plot Container (Left Side) */
+    /* Main plot container (left); the sidebar pushes it when open */
     #plot-container {{
       flex: 1 1 0%;
       min-width: 0;
       height: 100%;
       position: relative;
       overflow: hidden;
-      background: var(--bg-canvas);
+      background: var(--canvas);
     }}
     .plotly-graph-div {{
       width: 100% !important;
@@ -2346,351 +2450,180 @@ if (document.readyState === "loading") {{
         width: 100vw !important;
         height: 100vh !important;
       }}
+      .tf-speed {{ display: none; }}
     }}
-    /* Hide native Plotly slider and bulky buttons */
+    /* Collapsible sidebar (right): 300ms slide */
+    #sidebar {{
+      transition: margin-right 300ms cubic-bezier(.4, 0, .2, 1);
+    }}
+    #sidebar.collapsed {{
+      margin-right: -380px;
+    }}
+    #hud-card {{
+      flex: 1;
+      min-height: 0;
+      user-select: text;
+      -webkit-user-select: text;
+    }}
+    #sidebar-expand-btn {{
+      display: none;
+    }}
+    .tf-legend {{
+      z-index: 5;
+      pointer-events: none;
+    }}
+    /* The dock is the only transport: hide Plotly's native slider and updatemenus */
     .slider-container, .updatemenu-container {{
       display: none !important;
     }}
     .modebar-container {{
-      top: 14px !important;
-      left: 18px !important;
+      top: 44px !important;
+      left: 12px !important;
       right: auto !important;
       opacity: 0.65;
-      transition: opacity 0.2s ease;
+      transition: opacity 150ms cubic-bezier(.4, 0, .2, 1);
     }}
     .modebar-container:hover {{
-      opacity: 1.0;
+      opacity: 1;
     }}
-
-    /* Sidebar Floating Open Button (when collapsed) */
-    .sidebar-expand-btn {{
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      z-index: 95;
-      background: var(--dock-bg);
-      border: 1px solid var(--dock-border);
-      border-radius: 8px;
-      padding: 7px 12px;
-      cursor: pointer;
-      display: none;
-      align-items: center;
-      gap: 6px;
-      box-shadow: var(--dock-shadow);
-      color: var(--text-title);
-      font-size: 12px;
-      font-weight: 600;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      transition: transform 0.15s ease, background 0.15s ease;
-    }}
-    .sidebar-expand-btn:hover {{
-      background: var(--btn-hover);
-      transform: scale(1.02);
-    }}
-
-    /* Modern Floating Control Dock */
-    .control-dock {{
-      position: absolute;
-      bottom: 22px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--dock-bg);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1px solid var(--dock-border);
-      border-radius: 36px;
-      padding: 8px 16px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      box-shadow: var(--dock-shadow);
-      z-index: 85;
-      user-select: none;
-    }}
-    .dock-buttons {{
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }}
-    .dock-btn {{
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 1px solid var(--border-ui);
-      background: var(--btn-bg);
-      color: var(--text-title);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 12px;
-      transition: all 0.15s ease;
-    }}
-    .dock-btn:hover {{
-      background: var(--btn-hover);
-      transform: scale(1.06);
-    }}
-    .dock-btn.btn-play {{
-      width: 36px;
-      height: 36px;
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #ffffff;
-    }}
-    .dock-btn.btn-play:hover {{
-      background: var(--accent-hover);
-    }}
-    .dock-slider-wrap {{
-      position: relative;
+    .tf-scrub {{
       width: 190px;
-      display: flex;
-      align-items: center;
     }}
-    .dock-slider {{
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 5px;
-      border-radius: 3px;
-      background: var(--border-ui);
-      outline: none;
-      cursor: pointer;
-      position: relative;
-      z-index: 2;
-    }}
-    .dock-slider::-webkit-slider-thumb {{
-      -webkit-appearance: none;
-      appearance: none;
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-      transition: transform 0.1s ease;
-    }}
-    .dock-slider::-webkit-slider-thumb:hover {{
-      transform: scale(1.2);
-    }}
-    .dock-slider::-moz-range-thumb {{
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: pointer;
-      border: none;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-    }}
-    .dock-track-fill {{
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      height: 5px;
-      background: var(--accent);
-      border-radius: 3px;
-      pointer-events: none;
-      z-index: 1;
-      width: 0%;
-    }}
-    .dock-readout {{
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-body);
-      white-space: nowrap;
-    }}
-    .dock-s-val {{
-      color: var(--accent);
-    }}
-    .dock-s-max {{
-      color: var(--text-muted);
-      font-weight: 500;
-    }}
-    .dock-pct {{
+    .tf-s-pct {{
+      margin-left: 4px;
       font-size: 11px;
-      color: var(--text-muted);
-      margin-left: 2px;
-    }}
-    .dock-btn-speed {{
-      width: auto;
-      padding: 4px 10px;
-      border-radius: 16px;
-      border: 1px solid var(--border-ui);
-      background: var(--btn-bg);
-      color: var(--text-title);
-      font-weight: 700;
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.15s ease;
-    }}
-    .dock-btn-speed:hover {{
-      background: var(--btn-hover);
+      color: var(--ink-muted);
     }}
   </style>
 </head>
 <body>
-  <div id="app-layout">
+  <div id="app-layout" class="tf-root">
     <!-- Main Plot Canvas on the Left -->
-    <main id="plot-container">
-      <!-- Floating Expand Button when Sidebar is Collapsed -->
-      <button id="sidebar-expand-btn" class="sidebar-expand-btn" title="Expandir Painel Lateral">
-        <span>Painel</span> <span>◀</span>
-      </button>
+    <main id="plot-container" class="tf-stage">
+      <!-- Floating expand button when the sidebar is collapsed -->
+      <div class="tf-expand-slot">
+        <button id="sidebar-expand-btn" class="tf-expand" title="Expandir painel" aria-label="Expandir painel">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>
+          <span>Painel</span>
+        </button>
+      </div>
 
       {plotly_snippet}
 
-      <!-- Modern Floating Bottom Dock Centered in Canvas -->
-      <div id="control-dock" class="control-dock">
-        <div class="dock-buttons">
-          <button id="btn-dock-first" class="dock-btn" title="Início (s₀)">⏮</button>
-          <button id="btn-dock-prev" class="dock-btn" title="Passo Anterior">◀</button>
-          <button id="btn-dock-play" class="dock-btn btn-play" title="Reproduzir / Pausar">
-            <span id="play-icon">▶</span>
-          </button>
-          <button id="btn-dock-next" class="dock-btn" title="Próximo Passo">▶</button>
-          <button id="btn-dock-last" class="dock-btn" title="Fim (s₁)">⏭</button>
-        </div>
+      <div class="tf-legend">{legend_markup}</div>
 
-        <div class="dock-slider-wrap">
-          <input type="range" id="dock-slider" min="0" max="{num_frames - 1}" value="0" step="1" class="dock-slider" aria-label="Comprimento de arco s">
-          <div class="dock-track-fill" id="dock-track-fill"></div>
-        </div>
+      <!-- Floating control dock, bottom centre -->
+      <div class="tf-dock-slot">
+        <div id="control-dock" class="tf-dock">
+          <div class="tf-transport">
+            <button id="btn-dock-first" class="tf-dockbtn" aria-label="Início" title="Início (s₀)"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.8 8z"/></svg></button>
+            <button id="btn-dock-prev" class="tf-dockbtn" aria-label="Passo anterior" title="Passo anterior"><svg viewBox="0 0 16 16"><path d="M11.5 3v10L4.5 8z"/></svg></button>
+            <button id="btn-dock-play" class="tf-dockbtn tf-dockbtn--play" aria-label="Reproduzir ou pausar" title="Reproduzir ou pausar"><svg id="play-icon" viewBox="0 0 16 16"><path d="M4.5 2.6v10.8L13 8z"/></svg></button>
+            <button id="btn-dock-next" class="tf-dockbtn" aria-label="Próximo passo" title="Próximo passo"><svg viewBox="0 0 16 16"><path d="M4.5 3v10l7-5z"/></svg></button>
+            <button id="btn-dock-last" class="tf-dockbtn" aria-label="Fim" title="Fim (s₁)"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3l7.2 5L3 13z"/></svg></button>
+          </div>
 
-        <div class="dock-readout">
-          <span>s =</span>
-          <span class="dock-s-val" id="dock-s-val">{init_s:.3f}</span>
-          <span class="dock-s-max">/ {s1:.3f}</span>
-          <span class="dock-pct" id="dock-pct">0%</span>
-        </div>
+          <div class="tf-scrub">
+            <span class="tf-rail"></span><span class="tf-fill" id="dock-track-fill"></span>
+            <span class="tf-ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <input type="range" id="dock-slider" min="0" max="{num_frames - 1}" value="0" step="1" aria-label="Comprimento de arco s">
+          </div>
 
-        <button id="btn-dock-speed" class="dock-btn-speed" title="Velocidade da Reprodução">1x</button>
+          <div class="tf-sread">
+            <span class="tf-s-var">s</span><span>=</span>
+            <span class="tf-s-val" id="dock-s-val">{init_s:.3f}</span>
+            <span class="tf-s-max">/ {s1:.3f}</span>
+            <span class="tf-s-pct" id="dock-pct">0%</span>
+          </div>
+
+          <button id="btn-dock-speed" class="tf-speed" aria-label="Velocidade da reprodução" title="Velocidade da reprodução">1×</button>
+        </div>
       </div>
     </main>
 
-    <!-- Collapsible Modern Sidebar on the Right -->
-    <aside id="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-title-row">
-          <div class="sidebar-title-group">
-            <span class="brand-icon">∫</span>
-            <h1 class="sidebar-title">Teorema Fundamental de Curvas</h1>
+    <!-- Collapsible sidebar on the Right -->
+    <aside id="sidebar" class="tf-sidebar">
+      <header class="tf-sidebar-head">
+        <div class="tf-head-row">
+          <div class="tf-brand">
+            <span class="tf-mark">∫</span>
+            <div>
+              <h1 class="tf-title">Triedro</h1>
+              <p class="tf-subtitle">{subtitle}</p>
+            </div>
           </div>
-          <div class="header-actions">
-            <button id="theme-toggle-btn" class="icon-btn" title="Alternar Modo Claro/Escuro" aria-label="Alternar Tema">
-              <span id="theme-icon">🌙</span>
+          <div class="tf-actions">
+            <button id="theme-toggle-btn" class="tf-iconbtn" title="Alternar tema" aria-label="Alternar tema">
+              <svg id="theme-icon" viewBox="0 0 16 16"><path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6z"/></svg>
             </button>
-            <button id="sidebar-toggle-btn" class="icon-btn" title="Recolher Painel" aria-label="Recolher Painel">
-              <span>▶</span>
+            <button id="sidebar-toggle-btn" class="tf-iconbtn" title="Recolher painel" aria-label="Recolher painel">
+              <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>
             </button>
           </div>
         </div>
-        <div class="header-badges">
-          <span class="hud-badge badge-class" id="hud-class">{class_label}</span>
-          <span class="hud-badge badge-dim">{mode_label}</span>
+        <div class="tf-badges">
+          <span class="tf-badge tf-badge--class" id="hud-class">{class_label}</span>
+          <span class="tf-badge tf-badge--dim">{mode_label}</span>
         </div>
-      </div>
+      </header>
 
-      <!-- Main Scrollable Content Container (id="hud-card" preserved for test compatibility) -->
-      <div id="hud-card">
-        <!-- Section 1: Fórmulas Intrínsecas (KaTeX) -->
-        <div class="card-section">
-          <div class="section-title">Fórmulas Intrínsecas</div>
-          <div class="math-box">
-            <div class="math-row">
-              <span class="math-label">Curvatura:</span>
-              <span class="math-expr" id="math-kappa">$$\\kappa(s) = {kappa_tex}$$</span>
-            </div>
-            <div class="math-row">
-              <span class="math-label">Torção:</span>
-              <span class="math-expr" id="math-tau">$$\\tau(s) = {tau_tex}$$</span>
-            </div>
-            <div class="math-row">
-              <span class="math-label">Intervalo:</span>
-              <span class="math-expr">$$s \\in [{s0:.2f}, {s1:.2f}]$$</span>
-            </div>
+      <!-- Scrollable content (id="hud-card" preserved for test compatibility) -->
+      <div id="hud-card" class="tf-sidebar-body">
+        <section class="tf-panel">
+          <h3 class="tf-overline"><span class="tf-sec">§1</span>Fórmulas intrínsecas</h3>
+          <div class="tf-formula">
+            <div class="tf-formula-head"><span>Curvatura</span><span class="tf-tag tf-tag--r">κ</span></div>
+            <div class="tf-formula-math" id="math-kappa">{kappa_math}</div>
           </div>
-        </div>
-
-        <!-- Section 2: Teorema Fundamental — Equação e Triedro -->
-        <div class="card-section">
-          <div class="section-title">Teorema Fundamental — Equação e Triedro</div>
-          <div class="formula-card">
-            <div class="formula-row">
-              <div class="formula-title"><span>Curva Reconstruída</span> <span class="formula-badge">r(s)</span></div>
-              <div class="formula-math" id="math-curve-r">${formulas["curve_r"]}$</div>
-              <div class="formula-desc">{formulas["curve_desc"]}</div>
-            </div>
-            <div class="formula-row">
-              <div class="formula-title"><span>Vetor Tangente</span> <span class="formula-badge badge-t">T(s)</span></div>
-              <div class="formula-math" id="math-vec-t">${formulas["vec_t"]}$</div>
-            </div>
-            <div class="formula-row">
-              <div class="formula-title"><span>Vetor Normal Principal</span> <span class="formula-badge badge-n">N(s)</span></div>
-              <div class="formula-math" id="math-vec-n">${formulas["vec_n"]}$</div>
-            </div>
-            {binormal_formula_html}
+          <div class="tf-formula">
+            <div class="tf-formula-head"><span>Torção</span><span class="tf-tag tf-tag--r">τ</span></div>
+            <div class="tf-formula-math" id="math-tau">{tau_math}</div>
           </div>
-        </div>
-
-        <!-- Section 3: Curvas Associadas (Evoluta & Involuta) -->
-        <div class="card-section">
-          <div class="section-title">Curvas Associadas (Evoluta & Involuta)</div>
-          <div class="formula-card">
-            <div class="formula-row">
-              <div class="formula-title"><span>Evoluta (Centros de Curvatura)</span> <span class="formula-badge badge-evo">E(s)</span></div>
-              <div class="formula-math" id="math-evolute">${formulas["evolute"]}$</div>
-              <div class="formula-desc">{formulas["evolute_desc"]}</div>
-            </div>
-            <div class="formula-row">
-              <div class="formula-title"><span>Involuta / Evolvente de Corda</span> <span class="formula-badge badge-inv">I(s)</span></div>
-              <div class="formula-math" id="math-involute">${formulas["involute"]}$</div>
-              <div class="formula-desc">{formulas["involute_desc"]}</div>
-            </div>
-            <div class="formula-row">
-              <div class="formula-title"><span>Raios Característicos</span> <span class="formula-badge">ρ, σ</span></div>
-              <div class="formula-math" id="math-radii">${formulas["radii"]}$</div>
-            </div>
+          <div class="tf-formula">
+            <div class="tf-formula-head"><span>Intervalo</span><span class="tf-tag tf-tag--r">s</span></div>
+            <div class="tf-formula-math">{interval_math}</div>
           </div>
-        </div>
+        </section>
 
-        <!-- Section 4: Grandezas Instantâneas (Live HUD) -->
-        <div class="card-section">
-          <div class="section-title">Grandezas Instantâneas</div>
-          <div class="hud-grid">
-            <div class="hud-row"><span class="hud-label">Comprimento de Arco (s):</span><span class="hud-value" id="hud-s">{init_s:.3f}</span></div>
-            <div class="hud-row"><span class="hud-label">Posição r(s):</span><span class="hud-value" id="hud-r">{init_pos_str}</span></div>
-            <div class="hud-row"><span class="hud-label">Curvatura κ(s):</span><span class="hud-value" id="hud-kappa">{init_k:.3f}</span></div>
-            <div class="hud-row"><span class="hud-label">Torção τ(s):</span><span class="hud-value" id="hud-tau">{init_t_str}</span></div>
-            <div class="hud-row"><span class="hud-label">Raio Curvatura ρ(s):</span><span class="hud-value" id="hud-rho">{init_rho}</span></div>
+        <section class="tf-panel">
+          <h3 class="tf-overline"><span class="tf-sec">§2</span>Reconstrução e curvas associadas</h3>
+          {_formula("Curva reconstruída", "r", "tf-tag--r", "math-curve-r", formulas["curve_r"], formulas.get("curve_aux", ""))}
+          {_formula("Vetor tangente", "T", "tf-tag--t", "math-vec-t", formulas["vec_t"])}
+          {_formula("Vetor normal principal", "N", "tf-tag--n", "math-vec-n", formulas["vec_n"])}
+          {binormal_formula_html}
+          {_formula("Evoluta (centros de curvatura)", "E", "tf-tag--e", "math-evolute", formulas["evolute"], *assoc_formulas["evolute"])}
+          {_formula("Involuta (evolvente de corda)", "I", "tf-tag--i", "math-involute", formulas["involute"], *assoc_formulas["involute"])}
+          {_formula("Raios característicos", "ρ", "tf-tag--p", "math-radii", formulas["radii"])}
+        </section>
+
+        <section class="tf-panel">
+          <h3 class="tf-overline"><span class="tf-sec">§3</span>Grandezas instantâneas</h3>
+          <div class="tf-readouts">
+            <div class="tf-readout"><span class="tf-readout-label">Comprimento de arco <em>s</em></span><span class="tf-readout-value" id="hud-s">{init_s:.3f}</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Posição <em>r</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-r">{init_pos_str}</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Curvatura <em>κ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-kappa">{init_k:.3f}</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Torção <em>τ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-tau">{init_t_str}</span></div>
+            <div class="tf-readout"><span class="tf-readout-label">Raio de curvatura <em>ρ</em>(<em>s</em>)</span><span class="tf-readout-value" id="hud-rho">{init_rho}</span></div>
             {sigma_hud_row}
-            <div class="hud-row"><span class="hud-label">Evoluta E(s):</span><span class="hud-value" id="hud-evolute">{init_evo_str}</span></div>
-            <div class="hud-row"><span class="hud-label">Involuta I(s):</span><span class="hud-value" id="hud-involute">{init_inv_str}</span></div>
           </div>
-          <!-- Frame Vectors -->
-          <div class="hud-vectors">
-            {vec_html}
-          </div>
-        </div>
+          {vec_html}
+        </section>
 
-        <!-- Section 5: Visibilidade do Aparato -->
-        <div class="card-section">
-          <div class="section-title">Visibilidade do Aparato</div>
-          <div class="toggles-list">
-            {switches_markup}
-          </div>
-        </div>
+        <section class="tf-panel">
+          <h3 class="tf-overline"><span class="tf-sec">§4</span>Evoluta e involuta</h3>
+          {assoc_panel}
+        </section>
 
-        <!-- Section 6: Fundamentação Teórica -->
-        <div class="card-section">
-          <div class="section-title">Fundamentação Teórica</div>
-          <p class="theory-text">{theory_summary}</p>
-          <div class="hud-hint">{hint_str}</div>
-        </div>
+        <section class="tf-panel">
+          <h3 class="tf-overline"><span class="tf-sec">§5</span>Visibilidade do aparato</h3>
+          {switches_markup}
+        </section>
+
+        <section class="tf-panel">
+          <h3 class="tf-overline"><span class="tf-sec">§6</span>Fundamentação teórica</h3>
+          <p class="tf-prose">{theory_summary}</p>
+          <p class="tf-hint">{hint_str}</p>
+        </section>
       </div>
     </aside>
   </div>

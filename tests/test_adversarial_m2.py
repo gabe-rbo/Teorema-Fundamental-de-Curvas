@@ -65,7 +65,7 @@ class TestZeroCurvatureEdgeCases:
         assert ": NaN" not in content
         assert "NaN," not in content
         assert "null" in content or "∞" in content
-        assert '<span class="hud-value" id="hud-rho">∞</span>' in content
+        assert 'id="hud-rho">∞</span>' in content
 
 
 # ==============================================================================

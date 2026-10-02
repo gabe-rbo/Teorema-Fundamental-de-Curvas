@@ -245,7 +245,7 @@ class TestJavaScriptListenersAndInteractivity:
         assert "pt.curveNumber === 0" in html_content
         assert "pt.customdata" in html_content
         assert "Plotly.animate(gd" in html_content
-        assert '"sliders[0].active": frameIdx' in html_content
+        assert "Plotly.restyle(gd, upd, f.traces)" in html_content
         assert "updateHUDMetrics(frameIdx)" in html_content
 
     def test_slider_and_animation_listeners(self, html_content):
@@ -282,7 +282,7 @@ class TestDifferentialApparatusAndGeometry:
         """Verify the 10-trace composite differential apparatus at active point."""
         res = ce.reconstruct_curve("1", "1", s0=0.0, s1=6.28, num_points=50)
         fig = cv.build_curve_figure(res)
-        assert len(fig.data) == 10
+        assert len(fig.data) == 12  # 10 apparatus traces + evolute + involute
 
         expected_names = [
             "Curva r(s)",
@@ -295,6 +295,8 @@ class TestDifferentialApparatusAndGeometry:
             "Plano Normal (N, B)",
             "Plano Retificante (T, B)",
             "Círculo Osculador",
+            "Evoluta E(s)",
+            "Involuta I(s)",
         ]
         actual_names = [trace.name for trace in fig.data]
         assert actual_names == expected_names
@@ -488,6 +490,9 @@ class TestModernUIComponents:
     def test_custom_apparatus_switches(self, planar_html, space_html):
         assert "toggleTraceVisibility(" in planar_html
         assert "toggleTraceVisibility(" in space_html
+        # Inline onchange handlers need a global: the page script runs in a closure.
+        assert "window.toggleTraceVisibility = toggleTraceVisibility" in planar_html
+        assert "window.toggleTraceVisibility = toggleTraceVisibility" in space_html
         assert "Reta Normal L_N" in planar_html
         assert "Vetor Binormal B" in space_html
 
@@ -529,8 +534,8 @@ class TestModernUIComponents:
         # Control dock is inside plot-container before sidebar
         assert plot_idx < dock_idx < sidebar_idx
         # CSS checks
-        assert "margin-right: -360px" in planar_html
-        assert "border-left: 1px solid var(--border-ui)" in planar_html
+        assert "margin-right: -380px" in planar_html
+        assert "border-left: 1px solid var(--rule)" in planar_html
 
     def test_reconstructed_formulas_and_frenet_frame(self, planar_html, space_html):
         """Verify explicit mathematical formulas for r(s), T(s), N(s), and B(s) are present."""

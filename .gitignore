@@ -42,3 +42,6 @@ dist/
 !espiral_de_cornu-ks-t0-I0_5.html
 !espiral_logaritmica-k1_div_s_plus_1-t0-I0_10.html
 !clothoid.html
+
+# Generated example viewers (run exemplos/gerar_galeria.py)
+exemplos/*.html

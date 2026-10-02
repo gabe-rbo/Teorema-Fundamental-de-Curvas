@@ -1,0 +1,249 @@
+{
+ "_note": "Plotly styling for Triedro. Pick the block for the active theme; values mirror tokens.json. Merge `layout` into fig.update_layout and `scene` axis fields into layout.scene.*; colour traces from `traces`.",
+ "themes": {
+  "light": {
+   "traces": {
+    "curve": {
+     "color": "#3040c8",
+     "width": 4
+    },
+    "curve_future": {
+     "color": "#3040c8",
+     "opacity": 0.35,
+     "width": 2
+    },
+    "active_point": {
+     "color": "#9a5f00",
+     "outline": "#fbf8f1",
+     "size": 7
+    },
+    "tangent": {
+     "color": "#0b7a5a",
+     "width": 5
+    },
+    "normal": {
+     "color": "#b8421a",
+     "width": 5
+    },
+    "binormal": {
+     "color": "#9c3a86",
+     "width": 5
+    },
+    "tangent_line": {
+     "color": "#0b7a5a",
+     "opacity": 0.5,
+     "dash": "dash",
+     "width": 2
+    },
+    "normal_line": {
+     "color": "#b8421a",
+     "opacity": 0.5,
+     "dash": "dash",
+     "width": 2
+    },
+    "osculating_circle": {
+     "color": "#9a5f00",
+     "width": 2
+    },
+    "evolute": {
+     "color": "#0a7794",
+     "dash": "dash",
+     "width": 2.5
+    },
+    "involute": {
+     "color": "#5d7a00",
+     "dash": "dot",
+     "width": 2.5
+    },
+    "plane_osculating": {
+     "color": "rgba(156, 58, 134, 0.16)"
+    },
+    "plane_normal": {
+     "color": "rgba(11, 122, 90, 0.16)"
+    },
+    "plane_rectifying": {
+     "color": "rgba(184, 66, 26, 0.16)"
+    }
+   },
+   "layout": {
+    "paper_bgcolor": "rgba(0, 0, 0, 0)",
+    "plot_bgcolor": "rgba(0, 0, 0, 0)",
+    "font": {
+     "family": "Instrument Sans, ui-sans-serif, system-ui, sans-serif",
+     "color": "#5a5f73",
+     "size": 12
+    },
+    "hoverlabel": {
+     "bgcolor": "#fffdf8",
+     "bordercolor": "#8d8570",
+     "font": {
+      "family": "JetBrains Mono, ui-monospace, monospace",
+      "color": "#17192a",
+      "size": 12
+     }
+    },
+    "scene": {
+     "bgcolor": "rgba(0, 0, 0, 0)",
+     "axis": {
+      "gridcolor": "rgba(23, 25, 42, 0.08)",
+      "zerolinecolor": "rgba(23, 25, 42, 0.22)",
+      "linecolor": "rgba(23, 25, 42, 0.22)",
+      "tickfont": {
+       "color": "#5a5f73",
+       "size": 11
+      },
+      "backgroundcolor": "rgba(0, 0, 0, 0)",
+      "showbackground": false
+     }
+    },
+    "xaxis_2d": {
+     "gridcolor": "rgba(23, 25, 42, 0.08)",
+     "zerolinecolor": "rgba(23, 25, 42, 0.22)",
+     "linecolor": "rgba(23, 25, 42, 0.22)",
+     "tickfont": {
+      "color": "#5a5f73",
+      "size": 11
+     },
+     "scaleanchor": "y",
+     "scaleratio": 1
+    },
+    "yaxis_2d": {
+     "gridcolor": "rgba(23, 25, 42, 0.08)",
+     "zerolinecolor": "rgba(23, 25, 42, 0.22)",
+     "linecolor": "rgba(23, 25, 42, 0.22)",
+     "tickfont": {
+      "color": "#5a5f73",
+      "size": 11
+     }
+    },
+    "modebar": {
+     "bgcolor": "rgba(0, 0, 0, 0)",
+     "color": "#5a5f73",
+     "activecolor": "#3040c8"
+    }
+   }
+  },
+  "dark": {
+   "traces": {
+    "curve": {
+     "color": "#8ea2ff",
+     "width": 4
+    },
+    "curve_future": {
+     "color": "#8ea2ff",
+     "opacity": 0.35,
+     "width": 2
+    },
+    "active_point": {
+     "color": "#ffc247",
+     "outline": "#0b1020",
+     "size": 7
+    },
+    "tangent": {
+     "color": "#3fd9a6",
+     "width": 5
+    },
+    "normal": {
+     "color": "#ff8f66",
+     "width": 5
+    },
+    "binormal": {
+     "color": "#f08fd0",
+     "width": 5
+    },
+    "tangent_line": {
+     "color": "#3fd9a6",
+     "opacity": 0.5,
+     "dash": "dash",
+     "width": 2
+    },
+    "normal_line": {
+     "color": "#ff8f66",
+     "opacity": 0.5,
+     "dash": "dash",
+     "width": 2
+    },
+    "osculating_circle": {
+     "color": "#ffc247",
+     "width": 2
+    },
+    "evolute": {
+     "color": "#55d0ef",
+     "dash": "dash",
+     "width": 2.5
+    },
+    "involute": {
+     "color": "#c1e34f",
+     "dash": "dot",
+     "width": 2.5
+    },
+    "plane_osculating": {
+     "color": "rgba(240, 143, 208, 0.22)"
+    },
+    "plane_normal": {
+     "color": "rgba(63, 217, 166, 0.22)"
+    },
+    "plane_rectifying": {
+     "color": "rgba(255, 143, 102, 0.22)"
+    }
+   },
+   "layout": {
+    "paper_bgcolor": "rgba(0, 0, 0, 0)",
+    "plot_bgcolor": "rgba(0, 0, 0, 0)",
+    "font": {
+     "family": "Instrument Sans, ui-sans-serif, system-ui, sans-serif",
+     "color": "#9aa3bf",
+     "size": 12
+    },
+    "hoverlabel": {
+     "bgcolor": "#161d36",
+     "bordercolor": "#67729a",
+     "font": {
+      "family": "JetBrains Mono, ui-monospace, monospace",
+      "color": "#eef0f8",
+      "size": 12
+     }
+    },
+    "scene": {
+     "bgcolor": "rgba(0, 0, 0, 0)",
+     "axis": {
+      "gridcolor": "rgba(238, 240, 248, 0.08)",
+      "zerolinecolor": "rgba(238, 240, 248, 0.22)",
+      "linecolor": "rgba(238, 240, 248, 0.22)",
+      "tickfont": {
+       "color": "#9aa3bf",
+       "size": 11
+      },
+      "backgroundcolor": "rgba(0, 0, 0, 0)",
+      "showbackground": false
+     }
+    },
+    "xaxis_2d": {
+     "gridcolor": "rgba(238, 240, 248, 0.08)",
+     "zerolinecolor": "rgba(238, 240, 248, 0.22)",
+     "linecolor": "rgba(238, 240, 248, 0.22)",
+     "tickfont": {
+      "color": "#9aa3bf",
+      "size": 11
+     },
+     "scaleanchor": "y",
+     "scaleratio": 1
+    },
+    "yaxis_2d": {
+     "gridcolor": "rgba(238, 240, 248, 0.08)",
+     "zerolinecolor": "rgba(238, 240, 248, 0.22)",
+     "linecolor": "rgba(238, 240, 248, 0.22)",
+     "tickfont": {
+      "color": "#9aa3bf",
+      "size": 11
+     }
+    },
+    "modebar": {
+     "bgcolor": "rgba(0, 0, 0, 0)",
+     "color": "#9aa3bf",
+     "activecolor": "#8ea2ff"
+    }
+   }
+  }
+ }
+}
