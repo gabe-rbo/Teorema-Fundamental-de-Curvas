@@ -113,7 +113,7 @@ test("the typed kappa and tau are substituted into the algebraic expressions", (
   assert.match(get("involute").tex, /\(6 - s\)/);                               // s1 = 6
   assert.match(get("radii").tex, /\\sigma\(s\) = \\frac\{1\}\{\\left\|\\cos/);
   const planar = blocks("2+sin(3*s)", "0", 0, 5);
-  assert.match(planar.find((x) => x.id === "curve").aux[0], /\\theta\(s\) = \\int_\{0\}\^\{s\} 2 \+ \\sin\\left\(3\\,u\\right\)\\,du/);
+  assert.match(planar.find((x) => x.id === "T").aux[0], /\\theta\(s\) = \\int_\{0\}\^\{s\} 2 \+ \\sin\\left\(3\\,u\\right\)\\,du/);
 });
 
 test("closed forms are exact: radicals and fractions instead of decimals", () => {
@@ -129,4 +129,23 @@ test("closed forms are exact: radicals and fractions instead of decimals", () =>
   assert.strictEqual(theta, "\\theta(s) = s^{2} + s");
   const inv = blocks("1/(2*s+3)", "0", 1, 9).find((x) => x.id === "evolute").tex;
   assert.match(inv, /\\left\(2\\,s \+ 3\\right\)/);                                                    // (2s+3) N(s), parenthesised
+});
+
+test("theta(s) is integrated symbolically and exactly", () => {
+  const P = [1, 1, 1], th = (k, s0 = 0) => F.thetaTeX(Expr.parse(k), s0, P);
+  assert.strictEqual(th("2+sin(3*s)"), "2\\,s - \\frac{1}{3}\\cos\\left(3s\\right) + \\frac{1}{3}");
+  assert.strictEqual(th("2*s+1"), "s^{2} + s");
+  assert.ok(th("exp(s)") && th("1/(s+2)"));
+  assert.strictEqual(th("s*sin(s)"), null);
+});
+
+test("generic curves show the solved integrals of kappa and tau; planar T and N are explicit", () => {
+  const b = blocks("2+sin(3*s)", "1+0.5*cos(5*s)", 0, 4), cur = b.find((y) => y.id === "curve");
+  const tx = [cur.tex, ...cur.aux].join(" ");
+  assert.match(tx, /\\int_\{0\}\^\{s\} \\kappa\(u\)\\,du = 2\\,s - \\frac\{1\}\{3\}\\cos\\left\(3s\\right\) \+ \\frac\{1\}\{3\}/);
+  assert.match(tx, /\\int_\{0\}\^\{s\} \\tau\(u\)\\,du = .*\\sin\\left\(5s\\right\)/);
+  assert.ok(!/aligned|Delta|approx/.test(b.map((x) => [x.tex, ...x.aux].join(" ")).join(" ")), "no Taylor series");
+  const pl = blocks("2+sin(3*s)", "0", 0, 4);
+  assert.match(pl.find((y) => y.id === "T").tex, /\\cos\\left\(2\\,s - \\frac\{1\}\{3\}\\cos/);
+  assert.match(pl.find((y) => y.id === "curve").tex, /\\int_\{0\}\^\{s\} .*\\cos\\left\(2\\,u - \\frac\{1\}\{3\}\\cos\\left\(3u/);
 });

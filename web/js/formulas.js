@@ -123,6 +123,125 @@
     };
   }
 
+
+  // ---- symbolic antiderivative of kappa(s) (for theta(s) = integral of kappa) --------
+  function pAdd(a, b, k) { var n = Math.max(a.length, b.length), o = []; for (var i = 0; i < n; i++) o.push((a[i] || 0) + k * (b[i] || 0)); return o; }
+  function pMul(a, b) { var o = []; for (var i = 0; i < a.length + b.length - 1; i++) o.push(0); a.forEach(function (x, i) { b.forEach(function (y, j) { o[i + j] += x * y; }); }); return o; }
+  function pTrim(a) { var n = a.length; while (n > 1 && Math.abs(a[n - 1]) < 1e-14) n--; return a.slice(0, n); }
+  /** Coefficients [c0, c1, ...] of a polynomial in s (parameters a, b, c substituted), else null. */
+  function polyOf(ast, P) {
+    switch (ast.t) {
+      case "num": return [ast.v];
+      case "var": return ast.n === "s" ? [0, 1] : [P[{ a: 0, b: 1, c: 2 }[ast.n]]];
+      case "neg": { var q = polyOf(ast.a, P); return q && pAdd([0], q, -1); }
+      case "bin": {
+        var x = polyOf(ast.a, P), y = polyOf(ast.b, P);
+        if (ast.op === "^") {
+          if (!x || !ast.b || ast.b.t !== "num" || !Number.isInteger(ast.b.v) || ast.b.v < 0 || ast.b.v > 8) return null;
+          var r = [1]; for (var i = 0; i < ast.b.v; i++) r = pMul(r, x); return r;
+        }
+        if (!x || !y) return null;
+        if (ast.op === "+") return pAdd(x, y, 1);
+        if (ast.op === "-") return pAdd(x, y, -1);
+        if (ast.op === "*") return pMul(x, y);
+        y = pTrim(y); return y.length === 1 && y[0] !== 0 ? x.map(function (v) { return v / y[0]; }) : null;
+      }
+    }
+    return null;
+  }
+  /** Linear form a s + b of an argument, else null. */
+  function linOf(ast, P) { var q = polyOf(ast, P); if (!q) return null; q = pTrim(q); return q.length <= 2 ? { a: q[1] || 0, b: q[0] } : null; }
+  function linTeX(a, b, v) {
+    var lead = Math.abs(a - 1) < 1e-12 ? "" : Math.abs(a + 1) < 1e-12 ? "-" : T(a);
+    return lead + v + (Math.abs(b) < 1e-12 ? "" : " " + sgn(b) + " " + T(Math.abs(b)));
+  }
+  /** "c body" with its sign, for building sums term by term. */
+  function addTerm(acc, c, body) {
+    if (Math.abs(c) < 1e-12) return acc;
+    var t = T(Math.abs(c)), lead = Math.abs(Math.abs(c) - 1) < 1e-12 && body ? "" : t + (body && t.indexOf("\\frac") < 0 ? "\\," : "");
+    return acc + (acc ? (c < 0 ? " - " : " + ") : (c < 0 ? "-" : "")) + lead + body;
+  }
+  /**
+   * Primitive F of kappa as TeX plus a numeric F(x), for sums of polynomials and of
+   * sin, cos, exp, sinh, cosh, tanh, sqrt and 1/linear of linear arguments. null otherwise.
+   */
+  function antiderivative(ast, P, v) {
+    v = v || "s";
+    var tf = [], poly = [0], ok = true;
+    function go(a, k) {
+      if (!ok) return;
+      var pl = polyOf(a, P);
+      if (pl) { poly = pAdd(poly, pl, k); return; }
+      if (a.t === "neg") return go(a.a, -k);
+      if (a.t === "bin" && (a.op === "+" || a.op === "-")) { go(a.a, k); go(a.b, a.op === "+" ? k : -k); return; }
+      if (a.t === "bin" && a.op === "*") {
+        var pa = polyOf(a.a, P), pb = polyOf(a.b, P);
+        if (pa && pTrim(pa).length === 1) return go(a.b, k * pa[0]);
+        if (pb && pTrim(pb).length === 1) return go(a.a, k * pb[0]);
+        ok = false; return;
+      }
+      if (a.t === "bin" && a.op === "/") {
+        var d = polyOf(a.b, P), nn = polyOf(a.a, P);
+        if (d && pTrim(d).length === 1 && d[0] !== 0) return go(a.a, k / d[0]);
+        var L = linOf(a.b, P);
+        if (nn && pTrim(nn).length === 1 && L && L.a !== 0) {
+          var cc = k * nn[0] / L.a;
+          tf.push({ c: cc, body: "\\ln\\left|" + linTeX(L.a, L.b, v) + "\\right|", f: function (x) { return cc * Math.log(Math.abs(L.a * x + L.b)); } });
+          return;
+        }
+        ok = false; return;
+      }
+      if (a.t === "call") {
+        var m = linOf(a.a, P);
+        if (!m) { ok = false; return; }
+        var A = m.a, B = m.b, g = linTeX(A, B, v), cc2 = k / A;
+        if (Math.abs(A) < 1e-12) { ok = false; return; }
+        var spec = {
+          sin: ["\\cos", -1, function (z) { return Math.cos(z); }],
+          cos: ["\\sin", 1, function (z) { return Math.sin(z); }],
+          sinh: ["\\cosh", 1, function (z) { return Math.cosh(z); }],
+          cosh: ["\\sinh", 1, function (z) { return Math.sinh(z); }],
+          tanh: ["\\ln\\cosh", 1, function (z) { return Math.log(Math.cosh(z)); }]
+        }[a.f];
+        if (spec) {
+          var c3 = cc2 * spec[1];
+          tf.push({ c: c3, body: spec[0] + "\\left(" + g + "\\right)", f: function (x) { return c3 * spec[2](A * x + B); } });
+        } else if (a.f === "exp") {
+          tf.push({ c: cc2, body: "e^{" + g + "}", f: function (x) { return cc2 * Math.exp(A * x + B); } });
+        } else if (a.f === "sqrt") {
+          var c4 = 2 * cc2 / 3;
+          tf.push({ c: c4, body: "\\left(" + g + "\\right)^{3/2}", f: function (x) { return c4 * Math.pow(A * x + B, 1.5); } });
+        } else ok = false;
+        return;
+      }
+      ok = false;
+    }
+    go(ast, 1);
+    if (!ok) return null;
+    poly = pTrim(poly);
+    var tex_ = "";
+    for (var i = poly.length - 1; i >= 0; i--) tex_ = addTerm(tex_, poly[i] / (i + 1), i === 0 ? v : v + "^{" + (i + 1) + "}");
+    tf.forEach(function (t) { tex_ = addTerm(tex_, t.c, t.body); });
+    return {
+      tex: tex_ || "0",
+      at: function (x) {
+        var v = 0; poly.forEach(function (c, i) { v += c / (i + 1) * Math.pow(x, i + 1); });
+        tf.forEach(function (t) { v += t.f(x); });
+        return v;
+      }
+    };
+  }
+  /** theta(s) = integral of kappa from s0, as TeX, or null if no elementary primitive was found. */
+  function thetaTeX(ka, s0, P, v) {
+    var F;
+    try { F = antiderivative(ka, P, v); } catch (e) { F = null; }
+    if (!F) return null;
+    var c0 = -F.at(s0);
+    if (!isFinite(c0)) return null;
+    var t = F.tex;
+    return Math.abs(c0) < 1e-12 ? t : t + " " + sgn(c0) + " " + T(Math.abs(c0));
+  }
+
   function build(ctx) {
     var kind = cases(ctx.label), planar = ctx.planar;
     var s0 = ctx.s0, s1 = ctx.s1, S = shifted(s0), n = num;
@@ -130,7 +249,9 @@
     var kW = wrap(ctx.ka, kT), tW = wrap(ctx.ta, tT);
     var K;
     try { K = constants(ctx); } catch (e) { K = {}; }
-    var out = [];
+    var out = [], P = ctx.params;
+    var thS = thetaTeX(ctx.ka, s0, P);
+    var thU = thetaTeX(ctx.ka, s0, P, "u"), phS = planar ? null : thetaTeX(ctx.ta, s0, P);
 
     // ------------------------------------------------------------ r(s), T, N, B
     var theta = tex`\theta(s) = \int_{${T(s0)}}^{s} ${kU}\,du`;
@@ -188,11 +309,17 @@
         out.push(block("N", "Vetor normal principal", "N", "tf-tag--n", tex`N(s) = \left( -\sin\theta(s),\ \cos\theta(s) \right)`));
         break;
       }
-      case "planar":
-        out.push(block("curve", "Curva reconstruída", "r", "tf-tag--r", tex`r(s) = \int_{${T(s0)}}^{s} \left( \cos\theta(u),\ \sin\theta(u) \right) du`, [theta]));
-        out.push(block("T", "Vetor tangente", "T", "tf-tag--t", tex`T(s) = \left( \cos\theta(s),\ \sin\theta(s) \right) = \frac{dr}{ds}`));
-        out.push(block("N", "Vetor normal principal", "N", "tf-tag--n", tex`N(s) = \left( -\sin\theta(s),\ \cos\theta(s) \right)`));
+      case "planar": {
+        var thArg = thS ? tex`\left(${thS}\right)` : "\\theta(s)";
+        var thArgU = thU ? tex`\left(${thU}\right)` : "\\theta(u)";
+        out.push(block("curve", "Curva reconstruída", "r", "tf-tag--r",
+          tex`r(s) = r(s_0) + \int_{${T(s0)}}^{s} \left( \cos${thArgU},\ \sin${thArgU} \right) du`,
+          thS ? [] : [theta]));
+        out.push(block("T", "Vetor tangente", "T", "tf-tag--t", tex`T(s) = \left( \cos${thArg},\ \sin${thArg} \right)`,
+          thS ? [tex`\theta(s) = \int_{${T(s0)}}^{s} ${kU}\,du = ${thS}`] : [theta]));
+        out.push(block("N", "Vetor normal principal", "N", "tf-tag--n", tex`N(s) = \left( -\sin${thArg},\ \cos${thArg} \right)`));
         break;
+      }
       case "helix": {
         var kk = K.k0, tt = K.t0, W = kk * kk + tt * tt;
         var omT = SQ(W) || num(Math.sqrt(W));                     // omega = sqrt(kappa^2 + tau^2)
@@ -211,7 +338,10 @@
         var aux0 = kind === "lancret"
           ? [tex`\frac{\tau}{\kappa} = ${T(K.ratio)} = \text{const},\quad \langle T, u_0\rangle = \cos\alpha = ${SQs(K.ratio, 1 + K.ratio * K.ratio)}`]
           : [];
-        out.push(block("curve", "Curva reconstruída", "r", "tf-tag--r", tex`r(s) = r(s_0) + \int_{${T(s0)}}^{s} T(u)\,du`, aux0));
+        var solved = [];
+        if (thS) solved.push(tex`\int_{${T(s0)}}^{s} \kappa(u)\,du = ${thS}`);
+        if (phS) solved.push(tex`\int_{${T(s0)}}^{s} \tau(u)\,du = ${phS}`);
+        out.push(block("curve", "Curva reconstruída", "r", "tf-tag--r", tex`r(s) = r(s_0) + \int_{${T(s0)}}^{s} T(u)\,du`, aux0.concat(solved)));
         out.push(block("T", "Vetor tangente", "T", "tf-tag--t", tex`T'(s) = ${kW}\,N(s)`, [tex`T(s) = \frac{dr}{ds}`]));
         out.push(block("N", "Vetor normal principal", "N", "tf-tag--n", tex`N'(s) = -${kW}\,T(s) + ${tW}\,B(s)`));
         out.push(block("B", "Vetor binormal", "B", "tf-tag--b", tex`B'(s) = -${tW}\,N(s)`, [tex`B(s) = T(s)\times N(s)`]));
@@ -254,5 +384,5 @@
     return out;
   }
 
-  return { build: build, cases: cases };
+  return { build: build, cases: cases, thetaTeX: thetaTeX };
 });

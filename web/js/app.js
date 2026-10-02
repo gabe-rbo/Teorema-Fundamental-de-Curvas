@@ -39,6 +39,29 @@
     if (window.katex) { try { window.katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ } }
     el.textContent = tex;
   }
+  // Copying typeset math: KaTeX draws each formula twice (visual HTML plus a hidden MathML
+  // layer), so a plain copy yields one fragment per line. Replace every selected formula by
+  // the TeX source that produced it.
+  document.addEventListener("copy", function (ev) {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !ev.clipboardData) return;
+    var frag = document.createElement("div"), hit = false;
+    for (var i = 0; i < sel.rangeCount; i++) frag.appendChild(sel.getRangeAt(i).cloneContents());
+    frag.querySelectorAll(".katex").forEach(function (k) {
+      var a = k.querySelector('annotation[encoding="application/x-tex"]');
+      if (a) { k.replaceWith(document.createTextNode(a.textContent)); hit = true; }
+    });
+    // a selection made entirely inside one formula has no .katex ancestor in the clone
+    if (!hit) {
+      var host = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+      var kx = host && host.closest && host.closest(".katex"), a2 = kx && kx.querySelector('annotation[encoding="application/x-tex"]');
+      if (!a2) return;
+      ev.clipboardData.setData("text/plain", a2.textContent); ev.preventDefault(); return;
+    }
+    ev.clipboardData.setData("text/plain", frag.textContent);
+    ev.preventDefault();
+  });
+
   function renderTex() {
     if (texK) renderTexInto($("tex-k"), "\\kappa(s) = " + texK);
     if (texT) renderTexInto($("tex-t"), "\\tau(s) = " + texT);
