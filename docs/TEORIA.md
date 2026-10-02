@@ -58,6 +58,26 @@ $$\begin{aligned}
 
 Este sistema de 12 equações diferenciais ordinárias de primeira ordem (3 para posição e 9 para os vetores da base móvel) governa a evolução tridimensional da curva.
 
+### Quando existe solução elementar?
+
+O teorema garante que $\kappa(s)$ e $\tau(s)$ **determinam** a curva, mas não que ela possa ser escrita com funções elementares. O que se pode (ou não) resolver em forma fechada depende do caso:
+
+| Caso | $r(s)$, $T$, $N$, $B$ | O que o programa exibe |
+|---|---|---|
+| $\kappa = 0$ | reta | forma fechada |
+| $\kappa$ constante, $\tau = 0$ | círculo | forma fechada |
+| $\kappa$, $\tau$ constantes | hélice circular | forma fechada (a menos de movimento rígido) |
+| $\tau = 0$, $\kappa = cs + d$ | clotoide | integrais de Fresnel $C$, $S$ |
+| $\tau = 0$, $1/\kappa = as + b$ | espiral logarítmica | forma fechada |
+| $\tau = 0$, $\kappa$ qualquer | $T = (\cos\theta, \sin\theta)$ com $\theta = \int\kappa$ | $\theta$ resolvida quando a primitiva é elementar; $T$ e $N$ explícitos; $r(s)$ como integral com o integrando já explícito |
+| $\tau \neq 0$, geral | **sem solução elementar** | $\int\kappa$ e $\int\tau$ resolvidas quando possível; $T' = \kappa N$ etc. com $\kappa$, $\tau$ substituídas; $r(s) = r(s_0) + \int T$ |
+
+**Por que as curvas espaciais gerais não têm fórmula.** O sistema de Frenet-Serret $F' = \Omega(s) F$, com $\Omega$ antissimétrica de entradas $\kappa$ e $\tau$, é uma EDO linear com coeficientes variáveis. Para $\Omega$ arbitrária ela não tem solução em funções elementares, nem mesmo em quadraturas: as matrizes $\Omega(s_1)$ e $\Omega(s_2)$ não comutam em geral, então a exponencial $\exp\int\Omega$ não resolve o sistema. Escrever $T$, $N$, $B$ a partir de $\kappa$ e $\tau$ equivale a resolver a equação de Riccati associada (via projeção estereográfica de $SO(3)$ em $\mathbb{C}$), que é conhecida por não ter solução geral em quadraturas. Séries de Magnus ou de Picard convergem, mas não são formas fechadas. Por isso a curva é integrada numericamente (Magnus de 4ª ordem no aplicativo), e a única parte simbólica exata é a primitiva de $\kappa$ e de $\tau$.
+
+**Por que mesmo no caso plano $r(s)$ pode ficar como integral.** Com $\theta$ explícito, $r(s) = \int (\cos\theta, \sin\theta)\,du$. Para $\theta$ linear, quadrática ou logarítmica há forma fechada (círculo, clotoide, espiral logarítmica). Para outros $\theta$, como $\theta = 2s - \tfrac13\cos 3s$, a primitiva só existe como série de Bessel (expansão de Jacobi-Anger), não como função elementar.
+
+**Onde isso está no código.** A busca da primitiva falha, e cai na integral não resolvida, em `web/js/formulas.js` (função `antiderivative`, cada `ok = false` está comentado com o tipo de integrando que não cobre) e em `src/curva_viz.py` (`_solved_integral`, que lista as três situações de falha; e `_explicit_curve_formulas`, nos ramos plano e espacial genérico). Falhar ali não é erro: é uma propriedade do integrando.
+
 ---
 
 ## 4. Formulação Matricial e Álgebra de Lie $\mathfrak{so}(3)$

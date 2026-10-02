@@ -162,8 +162,20 @@
     return acc + (acc ? (c < 0 ? " - " : " + ") : (c < 0 ? "-" : "")) + lead + body;
   }
   /**
-   * Primitive F of kappa as TeX plus a numeric F(x), for sums of polynomials and of
-   * sin, cos, exp, sinh, cosh, tanh, sqrt and 1/linear of linear arguments. null otherwise.
+   * Primitive F of a function (kappa or tau) as TeX plus a numeric F(x), for sums of
+   * polynomials and of sin, cos, exp, sinh, cosh, tanh, sqrt and 1/linear of linear arguments.
+   *
+   * Returns null, and the caller falls back to the unevaluated integral, whenever a term is
+   * outside that table. Each `ok = false` below marks one such gap:
+   *   - product of two non-constant factors (s*sin(s), sin(s)*cos(s), exp(s)*s ...): would need
+   *     integration by parts or product-to-sum rewriting, which this table does not do;
+   *   - quotient whose numerator is not constant or whose denominator is not linear
+   *     (1/(s^2+1), s/(s+1) ...): would need partial fractions / arctan;
+   *   - a function of a non-linear argument (sin(s^2), exp(sin(s)), sqrt(s^2+1) ...): in general
+   *     these have no elementary primitive at all (sin(s^2) is a Fresnel integral);
+   *   - a function whose argument is constant (a = 0), or an unlisted function (tan, asin, acos,
+   *     atan, abs, ln): not handled.
+   * "No elementary primitive" is not an error: it is a property of the integrand.
    */
   function antiderivative(ast, P, v) {
     v = v || "s";
@@ -178,7 +190,7 @@
         var pa = polyOf(a.a, P), pb = polyOf(a.b, P);
         if (pa && pTrim(pa).length === 1) return go(a.b, k * pa[0]);
         if (pb && pTrim(pb).length === 1) return go(a.a, k * pb[0]);
-        ok = false; return;
+        ok = false; return;               // GAP: product of two non-constant factors
       }
       if (a.t === "bin" && a.op === "/") {
         var d = polyOf(a.b, P), nn = polyOf(a.a, P);
@@ -189,11 +201,11 @@
           tf.push({ c: cc, body: "\\ln\\left|" + linTeX(L.a, L.b, v) + "\\right|", f: function (x) { return cc * Math.log(Math.abs(L.a * x + L.b)); } });
           return;
         }
-        ok = false; return;
+        ok = false; return;               // GAP: quotient other than constant / linear
       }
       if (a.t === "call") {
         var m = linOf(a.a, P);
-        if (!m) { ok = false; return; }
+        if (!m) { ok = false; return; }   // GAP: non-linear argument, e.g. sin(s^2)
         var A = m.a, B = m.b, g = linTeX(A, B, v), cc2 = k / A;
         if (Math.abs(A) < 1e-12) { ok = false; return; }
         var spec = {
@@ -211,10 +223,10 @@
         } else if (a.f === "sqrt") {
           var c4 = 2 * cc2 / 3;
           tf.push({ c: c4, body: "\\left(" + g + "\\right)^{3/2}", f: function (x) { return c4 * Math.pow(A * x + B, 1.5); } });
-        } else ok = false;
+        } else ok = false;                // GAP: tan, asin, acos, atan, abs, ln
         return;
       }
-      ok = false;
+      ok = false;                         // GAP: any other node (power with non-integer exponent...)
     }
     go(ast, 1);
     if (!ok) return null;
@@ -335,6 +347,14 @@
         break;
       }
       default: {                                  // lancret + generic spatial: Frenet-Serret
+        // For arbitrary kappa and tau the system F' = Omega(s) F (Omega skew-symmetric, entries
+        // kappa and tau) is a linear ODE with variable coefficients. It has an elementary
+        // closed-form solution only in special cases: constant kappa and tau (circular helix, handled
+        // above), Lancret helices with tau/kappa constant reduced to a planar problem, or
+        // frames that happen to commute. In general (e.g. kappa = 2 + sin 3s, tau = 1 + cos 5s) there
+        // is no formula for r, T, N, B; Magnus/Picard series converge but are not closed forms.
+        // So we show what *can* be solved exactly, the primitives of kappa and tau, and keep
+        // r(s) = r(s0) + int T as the honest statement. The curve itself is integrated numerically.
         var aux0 = kind === "lancret"
           ? [tex`\frac{\tau}{\kappa} = ${T(K.ratio)} = \text{const},\quad \langle T, u_0\rangle = \cos\alpha = ${SQs(K.ratio, 1 + K.ratio * K.ratio)}`]
           : [];

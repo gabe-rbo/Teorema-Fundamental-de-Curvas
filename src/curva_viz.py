@@ -1461,6 +1461,206 @@ def _clothoid_formulas(kappa_expr: str) -> dict[str, str]:
     }
 
 
+def _solved_integral(f: sp.Expr, s: sp.Symbol, s0: sp.Expr) -> sp.Expr | None:
+    """
+    ∫_{s0}^{s} f in closed form, or None when no elementary primitive is found.
+
+    None is returned in three situations, and the caller then keeps the integral unevaluated:
+      1. sympy returns an unevaluated ``Integral`` (it proved or gave up finding an elementary
+         primitive, e.g. f = sin(s**2), exp(-s**2), sin(s)/s: these primitives exist only as
+         special functions such as Fresnel, erf, Si);
+      2. the primitive evaluated at s0 is singular (nan, zoo, ±oo), e.g. ln|s| with s0 = 0;
+      3. sympy raises (unsupported expression, recursion limit).
+    Failing here is not a bug: most integrands have no elementary primitive.
+    """
+    try:
+        F = sp.integrate(f, s)
+        if F.has(sp.Integral):  # case 1
+            return None
+        res = sp.simplify(F - F.subs(s, s0))
+        return None if res.has(sp.nan, sp.zoo, sp.oo, -sp.oo) else res  # case 2
+    except Exception:  # case 3
+        return None
+
+
+def _explicit_curve_formulas(
+    cls: str, kappa_expr: str, tau_expr: str, s0: float, s1: float, is_planar: bool
+) -> dict[str, str] | None:
+    """
+    Formulas with the user's kappa(s) and tau(s) substituted and every integral that has an
+    elementary primitive solved (theta = ∫kappa, ∫tau, Fresnel for the clothoid, the logarithmic
+    spiral, circle and circular helix). Returns None if the expressions cannot be handled.
+    """
+    s = sp.Symbol("s", real=True)
+    u = sp.Symbol("u", real=True)
+
+    def parse(e: str) -> sp.Expr:
+        return sp.sympify(str(e), locals={"s": s}, rational=True)
+
+    try:
+        k = parse(kappa_expr)
+        t = sp.Integer(0) if is_planar else parse(tau_expr)
+        S0 = sp.nsimplify(s0, rational=True)
+        S1 = f"{s1:g}"
+    except Exception:
+        return None
+
+    L = sp.latex
+
+    def vec(*comps: sp.Expr) -> str:
+        return r"\left( " + r",\, ".join(L(c) for c in comps) + r" \right)"
+
+    def fac(e: sp.Expr) -> str:
+        """A coefficient as a factor: nothing for 1, parentheses around sums."""
+        if e == 1:
+            return ""
+        return L(e) + r"\," if (e.is_Atom or (e.is_Mul and not e.has(sp.Add))) else rf"\left({L(e)}\right)\,"
+
+    def lin(items: list[tuple[sp.Expr, str]]) -> str:
+        """Signed sum  c1 V1 + c2 V2 ... with zero terms dropped and no stray '+ -'."""
+        out_s = ""
+        for c, v in items:
+            if c == 0:
+                continue
+            neg = c.could_extract_minus_sign()
+            out_s += (" - " if neg else " + ") if out_s else ("-" if neg else "")
+            out_s += fac(-c if neg else c) + v
+        return out_s or "0"
+
+    d = s - S0
+    evo = "E(s) = " + lin([(sp.Integer(1), "r(s)"), (sp.simplify(1 / k), "N(s)")])
+    inv = rf"I(s) = r(s) + ({S1} - s)\, T(s)"
+    rho = rf"\rho(s) = {L(1 / sp.Abs(k))}"
+    sigma = r"\sigma(s) = \infty" if is_planar else rf"\sigma(s) = {L(1 / sp.Abs(t))}" if t != 0 else r"\sigma(s) = \infty"
+    radii = rho + r", \quad " + sigma
+    out: dict[str, str] = {"evolute": evo, "involute": inv, "radii": radii, "vec_b": "", "curve_aux": ""}
+
+    def theta_forms(var: sp.Symbol) -> sp.Expr | None:
+        th = _solved_integral(k.subs(s, var), var, S0) if var == s else None
+        if var == s:
+            return th
+        full = _solved_integral(k, s, S0)
+        return None if full is None else full.subs(s, var)
+
+    if cls == "circulo" and k.is_number and k != 0:
+        out.update(
+            curve_r="r(s) = " + vec(sp.sin(k * d) / k, (1 - sp.cos(k * d)) / k),
+            vec_t="T(s) = " + vec(sp.cos(k * d), sp.sin(k * d)),
+            vec_n="N(s) = " + vec(-sp.sin(k * d), sp.cos(k * d)),
+            evolute="E(s) = " + vec(sp.Integer(0), 1 / k) + r" = \text{const}",
+            radii=rf"\rho = {L(1 / k)}, \quad \sigma = \infty",
+        )
+        return out
+    if cls == "helice_circular" and k.is_number and t.is_number and k != 0 and t != 0:
+        W = k**2 + t**2
+        om = sp.sqrt(W)
+        R = sp.simplify(k / W)
+        A, Bt = sp.simplify(k / om), sp.simplify(t / om)
+        out.update(
+            curve_r="r(s) = " + vec(R * (1 - sp.cos(om * d)), R * sp.sin(om * d), Bt * d),
+            curve_aux=rf"\omega = \sqrt{{\kappa^2+\tau^2}} = {L(om)},\quad R = \frac{{\kappa}}{{\omega^2}} = {L(R)}"
+            r",\quad \text{(forma canônica, a menos de um movimento rígido)}",
+            vec_t="T(s) = " + vec(A * sp.sin(om * d), A * sp.cos(om * d), Bt),
+            vec_n="N(s) = " + vec(sp.cos(om * d), -sp.sin(om * d), sp.Integer(0)),
+            vec_b="B(s) = " + vec(Bt * sp.sin(om * d), Bt * sp.cos(om * d), -A),
+            radii=rf"\rho = {L(1 / k)}, \quad \sigma = {L(1 / t)}",
+        )
+        return out
+    if cls == "espiral_de_cornu":
+        try:
+            poly = sp.Poly(k, s)
+            c, dd = poly.coeff_monomial(s), poly.coeff_monomial(1)
+            if poly.degree() != 1 or not (c.is_number and dd.is_number):
+                raise ValueError
+        except Exception:
+            return None
+        u0 = S0 + dd / c
+        phi = sp.simplify(-c * u0**2 / 2)
+        a = sp.sqrt(sp.Abs(c) / sp.pi)
+        pref = sp.sqrt(sp.pi / sp.Abs(c))
+        arg = sp.simplify(a * (s + dd / c))
+        x0 = sp.simplify(a * u0)
+        sg = "-" if c < 0 else ""
+        th = sp.expand(c * s**2 / 2 + dd * s - (c * S0**2 / 2 + dd * S0))
+        fres = r"C(x) = \int_0^x \cos\frac{\pi t^2}{2}\,dt,\quad S(x) = \int_0^x \sin\frac{\pi t^2}{2}\,dt"
+        if u0 == 0:
+            curve = rf"r(s) = {L(pref)}\left( C\!\left({L(arg)}\right),\, {sg}S\!\left({L(arg)}\right) \right)"
+        else:
+            fres += r",\quad R_\varphi = \begin{pmatrix} \cos\varphi & -\sin\varphi \\ \sin\varphi & \cos\varphi \end{pmatrix}"
+            curve = (
+                rf"r(s) = R_{{{L(phi)}}}\,{L(pref)}\left( C\!\left({L(arg)}\right) - C\!\left({L(x0)}\right),\,"
+                rf" {sg}\left[ S\!\left({L(arg)}\right) - S\!\left({L(x0)}\right) \right] \right)"
+            )
+        out.update(
+            curve_r=curve,
+            curve_aux=fres,
+            vec_t=rf"T(s) = \left( \cos\theta(s),\, \sin\theta(s) \right),\quad \theta(s) = {L(th)}",
+            vec_n=r"N(s) = \left( -\sin\theta(s),\, \cos\theta(s) \right)",
+        )
+        return out
+    if cls == "espiral_logaritmica":
+        try:
+            poly = sp.Poly(sp.simplify(1 / k), s)
+            la, lb = poly.coeff_monomial(s), poly.coeff_monomial(1)
+            if poly.degree() != 1 or not (la.is_number and lb.is_number) or la == 0:
+                raise ValueError
+        except Exception:
+            return None
+        p = 1 / la
+        w0 = la * S0 + lb
+        y = (la * s + lb) / w0
+        th = p * sp.log(y)
+        kc = sp.simplify(w0 / la / (1 + p**2))
+        out.update(
+            curve_r=rf"r(s) = {L(kc)}\left( y\left(\cos\theta + {L(p)}\sin\theta\right) - 1,\ y\left(\sin\theta - {L(p)}\cos\theta\right) + {L(p)} \right)",
+            curve_aux=rf"y(s) = {L(sp.simplify(y))},\quad \theta(s) = {L(th)}",
+            vec_t=r"T(s) = \left( \cos\theta(s),\, \sin\theta(s) \right)",
+            vec_n=r"N(s) = \left( -\sin\theta(s),\, \cos\theta(s) \right)",
+        )
+        return out
+
+    # Generic case: theta = ∫kappa. If that has no elementary primitive, T and N keep the symbol
+    # theta(s) and the integral is shown unevaluated (see _solved_integral).
+    theta = _solved_integral(k, s, S0)
+    if is_planar:
+        # Planar: T = (cos θ, sin θ) is explicit once θ is. r(s) = ∫T needs a primitive of
+        # cos θ(u) and sin θ(u); for non-polynomial θ (e.g. θ = 2s - cos(3s)/3) these are
+        # Bessel-type series (Jacobi-Anger), not elementary, so r(s) stays an integral whose
+        # integrand is already explicit. Only θ linear (circle), quadratic (clothoid, Fresnel)
+        # and logarithmic (log spiral) are handled above in closed form.
+        th_s = rf"\left({L(theta)}\right)" if theta is not None else r"\theta(s)"
+        th_u = rf"\left({L(theta.subs(s, u))}\right)" if theta is not None else r"\theta(u)"
+        out.update(
+            curve_r=rf"r(s) = r(s_0) + \int_{{{L(S0)}}}^{{s}} \left( \cos{th_u},\, \sin{th_u} \right) du",
+            vec_t=rf"T(s) = \left( \cos{th_s},\, \sin{th_s} \right)",
+            vec_n=rf"N(s) = \left( -\sin{th_s},\, \cos{th_s} \right)",
+        )
+        out["curve_aux"] = (
+            rf"\theta(s) = \int_{{{L(S0)}}}^{{s}} {L(k.subs(s, u))}\,du = {L(theta)}" if theta is not None else ""
+        )
+        return out
+
+    # Space curve with generic kappa(s), tau(s). The Frenet-Serret system F' = Ω(s)F is a linear
+    # ODE with variable coefficients; for arbitrary Ω it has NO elementary solution, so r, T, N, B
+    # cannot be written in closed form (only constant kappa and tau give the circular helix, which
+    # is handled above). What does have a closed form is ∫kappa and ∫tau when elementary, shown
+    # as the solved part; the curve itself is computed by numerical integration of the ODE.
+    solved = []
+    if theta is not None:
+        solved.append(rf"\int_{{{L(S0)}}}^{{s}} \kappa(u)\,du = {L(theta)}")
+    phi = _solved_integral(t, s, S0) if t != 0 else None
+    if phi is not None:
+        solved.append(rf"\int_{{{L(S0)}}}^{{s}} \tau(u)\,du = {L(phi)}")
+    out.update(
+        curve_r=rf"r(s) = r(s_0) + \int_{{{L(S0)}}}^{{s}} T(u)\,du",
+        curve_aux=(r"\begin{gathered} " + r" \\ ".join(solved) + r" \end{gathered}") if solved else "",
+        vec_t="T'(s) = " + lin([(k, "N(s)")]),
+        vec_n="N'(s) = " + lin([(-k, "T(s)"), (t, "B(s)")]),
+        vec_b="B'(s) = " + lin([(-t, "N(s)")]),
+    )
+    return out
+
+
 def _build_curve_formulas(
     curve_res: CurveResult | None, is_planar: bool
 ) -> dict[str, str]:
@@ -1474,6 +1674,10 @@ def _build_curve_formulas(
     tau_expr = getattr(curve_res, "tau_expr", "0") if curve_res else "0"
     s0 = float(getattr(curve_res, "s0", 0.0)) if curve_res else 0.0
     s1 = float(getattr(curve_res, "s1", 6.28)) if curve_res else 6.28
+
+    explicit = _explicit_curve_formulas(cls, str(kappa_expr), str(tau_expr), s0, s1, is_planar)
+    if explicit is not None:
+        return explicit
 
     if cls == "circulo":
         return {

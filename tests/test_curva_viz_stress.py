@@ -548,7 +548,7 @@ class TestModernUIComponents:
         assert 'id="math-vec-b"' in space_html
 
         # Circle formulas check
-        assert r"\sin(\kappa s)" in planar_html
+        assert r"\sin{\left(s \right)}" in planar_html          # kappa = 1 substituted
         # Helix formulas check
         assert r"\omega" in space_html
 
