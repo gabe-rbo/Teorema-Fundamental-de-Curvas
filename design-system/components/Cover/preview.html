@@ -1,0 +1,43 @@
+<!-- @dsCard height=288 -->
+<!doctype html><meta charset="utf-8">
+<style>
+  html,body{margin:0;background:var(--canvas)}
+  .cover{position:relative;width:960px;height:288px;background:var(--canvas);overflow:hidden}
+  .cover svg{position:absolute;left:480px;top:0}
+  .cover .name{position:absolute;left:40px;bottom:36px;width:440px}
+  .cover h1{margin:0;font-family:var(--font-display);font-weight:400;font-size:104px;line-height:.95;letter-spacing:-0.02em;color:var(--ink)}
+  .cover p{margin:12px 0 0;font-family:var(--font-sans);font-size:14px;line-height:20px;color:var(--ink-muted)}
+</style>
+<div class="cover">
+<!-- Derivation
+ blocks: curve 192x168 (8u x 7u, radius-lg) + ink 240x192 bleeding off right (10u x 8u) + point 96x96 + normal 96x120 + tangent 48x48, u = space-6 (24px)
+ arrangement: staggered stack; the curve slab hangs from the top edge, ink bleeds off the right edge, three small blocks step between them
+ pattern: literal motif (the osculating circle): concentric quarter arcs at radii 24..168 (space-6 multiples) centred on a block corner, ground cut out of the block
+ steps and radii used: space-6 (24px) pitch, radius-lg 18px on the slabs, radius-sm 8px on the small blocks
+-->
+<svg width="480" height="288" viewBox="0 0 480 288" aria-hidden="true">
+  <style>
+    .b-curve{fill:var(--curve);rx:var(--radius-lg)} .b-ink{fill:var(--ink);rx:var(--radius-lg)}
+    .b-point{fill:var(--point);rx:var(--radius-sm)} .b-normal{fill:var(--normal);rx:var(--radius-sm)} .b-tangent{fill:var(--tangent);rx:var(--radius-sm)}
+    .cut{fill:none;stroke:var(--canvas);stroke-width:2}
+  </style>
+  <defs>
+    <clipPath id="ca"><rect x="48" y="-18" width="192" height="186" rx="18"/></clipPath>
+    <clipPath id="cb"><rect x="240" y="96" width="258" height="192" rx="18"/></clipPath>
+  </defs>
+  <rect class="b-curve" x="48" y="-18" width="192" height="186"/>
+  <g clip-path="url(#ca)">
+    <circle class="cut" cx="240" cy="168" r="24"/><circle class="cut" cx="240" cy="168" r="48"/><circle class="cut" cx="240" cy="168" r="72"/>
+    <circle class="cut" cx="240" cy="168" r="96"/><circle class="cut" cx="240" cy="168" r="120"/><circle class="cut" cx="240" cy="168" r="144"/><circle class="cut" cx="240" cy="168" r="168"/>
+  </g>
+  <rect class="b-ink" x="240" y="96" width="258" height="192"/>
+  <g clip-path="url(#cb)">
+    <circle class="cut" cx="240" cy="96" r="24"/><circle class="cut" cx="240" cy="96" r="48"/><circle class="cut" cx="240" cy="96" r="72"/>
+    <circle class="cut" cx="240" cy="96" r="96"/><circle class="cut" cx="240" cy="96" r="120"/><circle class="cut" cx="240" cy="96" r="144"/>
+  </g>
+  <rect class="b-point" x="240" y="0" width="96" height="72"/>
+  <rect class="b-normal" x="48" y="192" width="96" height="96"/>
+  <rect class="b-tangent" x="144" y="216" width="72" height="72"/>
+</svg>
+<div class="name"><h1>Triedro</h1><p>Interface científica para curvas, curvatura e torção.</p></div>
+</div>

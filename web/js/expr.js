@@ -304,8 +304,8 @@
     if (ast.t === "neg") return 3;
     return 9;
   }
-  function paren(ast, min) {
-    var s = toTeX(ast);
+  function paren(ast, min, opt) {
+    var s = toTeX(ast, opt);
     return prec(ast) < min ? "\\left(" + s + "\\right)" : s;
   }
   function num(v) {
@@ -313,34 +313,35 @@
     var s = String(+v.toPrecision(6));
     return s.indexOf("e") >= 0 ? s.replace(/e([+-]?)(\d+)/, "\\cdot 10^{$1$2}") : s;
   }
-  function toTeX(ast) {
+  function toTeX(ast, opt) {
+    // opt.s renames the variable s (e.g. "u" for an integrand)
     switch (ast.t) {
       case "num": return ast.name === "pi" ? "\\pi" : ast.name === "e" ? "e" : num(ast.v);
-      case "var": return ast.n;
-      case "neg": return "-" + paren(ast.a, 3);
+      case "var": return ast.n === "s" && opt && opt.s ? opt.s : ast.n;
+      case "neg": return "-" + paren(ast.a, 3, opt);
       case "call":
-        if (ast.f === "sqrt") return "\\sqrt{" + toTeX(ast.a) + "}";
-        if (ast.f === "abs") return "\\left|" + toTeX(ast.a) + "\\right|";
-        if (ast.f === "exp") return "e^{" + toTeX(ast.a) + "}";
-        if (ast.f === "log") return "\\ln\\left(" + toTeX(ast.a) + "\\right)";
+        if (ast.f === "sqrt") return "\\sqrt{" + toTeX(ast.a, opt) + "}";
+        if (ast.f === "abs") return "\\left|" + toTeX(ast.a, opt) + "\\right|";
+        if (ast.f === "exp") return "e^{" + toTeX(ast.a, opt) + "}";
+        if (ast.f === "log") return "\\ln\\left(" + toTeX(ast.a, opt) + "\\right)";
         var nm = { asin: "\\arcsin", acos: "\\arccos", atan: "\\arctan" }[ast.f] || "\\" + ast.f;
-        return nm + "\\left(" + toTeX(ast.a) + "\\right)";
+        return nm + "\\left(" + toTeX(ast.a, opt) + "\\right)";
       case "bin":
-        if (ast.op === "/") return "\\frac{" + toTeX(ast.a) + "}{" + toTeX(ast.b) + "}";
-        if (ast.op === "^") return paren(ast.a, 5) + "^{" + toTeX(ast.b) + "}";
+        if (ast.op === "/") return "\\frac{" + toTeX(ast.a, opt) + "}{" + toTeX(ast.b, opt) + "}";
+        if (ast.op === "^") return paren(ast.a, 5, opt) + "^{" + toTeX(ast.b, opt) + "}";
         if (ast.op === "*") {
           var implicit = ast.a.t === "num" && (ast.b.t === "var" || ast.b.t === "call" || (ast.b.t === "bin" && ast.b.op === "^"));
-          return paren(ast.a, 2) + (implicit ? "\\," : " \\cdot ") + paren(ast.b, 3);
+          return paren(ast.a, 2, opt) + (implicit ? "\\," : " \\cdot ") + paren(ast.b, 3, opt);
         }
-        if (ast.op === "-") return paren(ast.a, 1) + " - " + paren(ast.b, 2);
-        return paren(ast.a, 1) + " + " + paren(ast.b, 1);
+        if (ast.op === "-") return paren(ast.a, 1, opt) + " - " + paren(ast.b, 2, opt);
+        return paren(ast.a, 1, opt) + " + " + paren(ast.b, 1, opt);
     }
     return "";
   }
 
   return {
     FUNCS: FUNCS, VARS: VARS, ExprError: ExprError,
-    parse: parse, compile: compile, evalJet: evalJet, toTeX: toTeX, usesVar: usesVar,
+    parse: parse, compile: compile, evalJet: evalJet, toTeX: toTeX, usesVar: usesVar, num: num,
     J: J, constJet: constJet, varJet: varJet
   };
 });

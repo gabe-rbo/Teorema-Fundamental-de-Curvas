@@ -1,0 +1,20 @@
+<!-- @dsCard group="Display" height=470 subtitle="KaTeX well with a frame tag" -->
+<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<body style="margin:0;background:var(--canvas)"><div class="tf-root" style="padding:24px;background:var(--canvas)">
+<div style="width:340px;display:flex;flex-direction:column;gap:10px;background:var(--panel);padding:16px;border-radius:12px"><div class="tf-formula">
+  <div class="tf-formula-head"><span>Curva reconstruída</span><span class="tf-tag tf-tag--r">r</span></div>
+  <div class="tf-formula-math tf-tex-fallback" data-tex="r(s)=r_0+\int_{s_0}^{s}T(u)\,du">r(s)=r_0+\int_{s_0}^{s}T(u)\,du</div><p class="tf-formula-desc">Clotoide com κ(s) = c·s.</p>
+</div><div class="tf-formula">
+  <div class="tf-formula-head"><span>Vetor tangente</span><span class="tf-tag tf-tag--t">T</span></div>
+  <div class="tf-formula-math tf-tex-fallback" data-tex="T(s)=(\cos\theta(s),\ \sin\theta(s))">T(s)=(\cos\theta(s),\ \sin\theta(s))</div>
+</div><div class="tf-formula">
+  <div class="tf-formula-head"><span>Vetor normal principal</span><span class="tf-tag tf-tag--n">N</span></div>
+  <div class="tf-formula-math tf-tex-fallback" data-tex="N(s)=(-\sin\theta(s),\ \cos\theta(s))">N(s)=(-\sin\theta(s),\ \cos\theta(s))</div>
+</div><div class="tf-formula">
+  <div class="tf-formula-head"><span>Evoluta (centros de curvatura)</span><span class="tf-tag tf-tag--e">E</span></div>
+  <div class="tf-formula-math tf-tex-fallback" data-tex="E(s)=r(s)+\frac{1}{\kappa(s)}\,N(s)">E(s)=r(s)+\frac{1}{\kappa(s)}\,N(s)</div><p class="tf-formula-desc">Envelope das retas normais.</p>
+</div></div>
+</div>
+<script>document.querySelectorAll("[data-tex]").forEach(function(el){try{window.katex.render(el.getAttribute("data-tex"),el,{throwOnError:false,displayMode:false});el.classList.remove("tf-tex-fallback")}catch(e){}});</script></body>

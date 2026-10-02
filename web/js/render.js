@@ -48,6 +48,7 @@
     this.show = { curve: true, point: true, T: true, N: true, B: true, tline: true, nline: true,
       circle: true, planes: true, evolute: true, involute: true, grid: true };
     this.lineWidth = 2.5;
+    this.ortho = false;       // axonometric (parallel) projection: no vanishing point
     this.dirty = { bg: true, fg: true };
     this.raf = 0;
     this.interacting = false;
@@ -93,6 +94,7 @@
   P.setIndex = function (i) { this.idx = i; this.requestDraw("fg"); };
   P.setShow = function (flags) { for (var k in flags) this.show[k] = flags[k]; this.requestDraw(); };
   P.setLineWidth = function (w) { this.lineWidth = w; this.requestDraw(); };
+  P.setOrtho = function (on) { this.ortho = !!on; this.requestDraw(); };
 
   P.setData = function (d) {
     var was2 = this.d ? this.d.planar : null;
@@ -171,12 +173,21 @@
     ux = ry * fz - rz * fy; uy = rz * fx - rx * fz; uz = rx * fy - ry * fx;
     this.pr = { ex: ex, ey: ey, ez: ez, fx: fx, fy: fy, fz: fz, rx: rx, ry: ry, rz: rz, ux: ux, uy: uy, uz: uz,
       focal: (Math.max(1, this.h - this.insetBottom) / 2) / Math.tan(0.31),
+      ortho: this.ortho,
       ox: this.w / 2, oy: Math.max(1, this.h - this.insetBottom) / 2 + 8 };
+    // pixels per world unit at the target distance: switching projection keeps the scale
+    this.pr.so = this.pr.focal / c.dist;
   };
   /** Project into out = [px, py, depth]. */
   P._p3 = function (x, y, z, out) {
     var p = this.pr, dx = x - p.ex, dy = y - p.ey, dz = z - p.ez;
     var depth = dx * p.fx + dy * p.fy + dz * p.fz;
+    if (p.ortho) {
+      out[0] = p.ox + (dx * p.rx + dy * p.ry + dz * p.rz) * p.so;
+      out[1] = p.oy - (dx * p.ux + dy * p.uy + dz * p.uz) * p.so;
+      out[2] = depth;
+      return true;
+    }
     var f = p.focal / (depth > 1e-9 ? depth : 1e-9);
     out[0] = p.ox + (dx * p.rx + dy * p.ry + dz * p.rz) * f;
     out[1] = p.oy - (dx * p.ux + dy * p.uy + dz * p.uz) * f;

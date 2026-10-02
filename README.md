@@ -24,6 +24,8 @@ O projeto oferece **duas formas de uso complementares**:
 Basta abrir o arquivo [`index.html`](index.html) em qualquer navegador moderno.
 
 - **Playground em tempo real:** digite expressões para $\kappa(s)$ e $\tau(s)$, ajuste parâmetros $a, b, c$ via sliders e navegue pelo comprimento de arco.
+- **Expressões algébricas:** o painel mostra $r(s)$, $T$, $N$, $B$, os planos osculador, normal e retificante, o círculo osculador, a evoluta, a involuta e os raios, com as suas funções $\kappa(s)$ e $\tau(s)$ já substituídas e, quando existe, a forma fechada (círculo, hélice, clotoide por integrais de Fresnel, espiral logarítmica).
+- **Projeção axonométrica:** um botão no dock alterna entre perspectiva e projeção paralela (sem ponto de fuga) nas curvas 3D. O mesmo botão existe nos visualizadores gerados pela CLI.
 - **Galeria com 32 curvas:** inclui retas, círculos, hélices, nós toroidais, clotoides, espirais e curvas de transição com miniaturas interativas.
 - **Motor JavaScript de alta precisão:** integração pelo método de Magnus de 4ª ordem (conservação exata no grupo de Lie $\mathrm{SO}(3)$) e canvas em duas camadas a 60 fps.
 

@@ -11,10 +11,10 @@
  */
 (function () {
   "use strict";
-  var Tr = window.Triedro, Expr = Tr.Expr, Eng = Tr.Engine, Viewer = Tr.Viewer, PRESETS = Tr.PRESETS;
+  var Tr = window.Triedro, Expr = Tr.Expr, Eng = Tr.Engine, Viewer = Tr.Viewer, Formulas = Tr.Formulas, PRESETS = Tr.PRESETS;
   function $(id) { return document.getElementById(id); }
 
-  var DEFAULTS = { k: "2+sin(3*s)", t: "1+0.5*cos(5*s)", s0: 0, s1: 14, n: 700, sub: 2, params: [1, 1, 1], lw: 2.5 };
+  var DEFAULTS = { k: "2+sin(3*s)", t: "1+0.5*cos(5*s)", s0: 0, s1: 14, n: 700, sub: 2, params: [1, 1, 1], lw: 2.5, ortho: false };
   var state = JSON.parse(JSON.stringify(DEFAULTS));
   var cache = { k: null, t: null };
   var model = null;           // { ka, ta, data, label }
@@ -42,7 +42,37 @@
   function renderTex() {
     if (texK) renderTexInto($("tex-k"), "\\kappa(s) = " + texK);
     if (texT) renderTexInto($("tex-t"), "\\tau(s) = " + texT);
-    document.querySelectorAll("[data-tex]").forEach(function (el) { renderTexInto(el, el.getAttribute("data-tex")); });
+    // static formulas only; the generated ones in #formulas are typeset by renderFormulas
+    document.querySelectorAll("[data-tex]").forEach(function (el) {
+      if (!el.closest("#formulas")) renderTexInto(el, el.getAttribute("data-tex"));
+    });
+  }
+
+  // ------------------------------------------------------- algebraic formulas
+  // Rebuilt after the curve changes, but only when the section is open and the user has
+  // paused (120 ms), so dragging a slider never pays for typesetting.
+  var formulaTimer = 0, formulaDirty = true;
+  function esc(sv) { return sv.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+  function scheduleFormulas() {
+    formulaDirty = true;
+    clearTimeout(formulaTimer);
+    formulaTimer = setTimeout(renderFormulas, 120);
+  }
+  function renderFormulas() {
+    var panel = $("panel-formulas");
+    if (!model || !panel.open || !formulaDirty) return;
+    formulaDirty = false;
+    var blocks;
+    try {
+      blocks = Formulas.build({ ka: model.ka, ta: model.ta, label: model.label, s0: state.s0, s1: state.s1,
+        params: state.params, planar: model.data.planar });
+    } catch (e) { blocks = []; }
+    $("formulas").innerHTML = blocks.map(function (b) {
+      return '<div class="tf-formula"><div class="tf-formula-head"><span>' + b.title + '</span><span class="tf-tag ' + b.cls + '">' + b.tag +
+        '</span></div><div class="tf-formula-math" data-tex="' + esc(b.tex) + '"></div>' +
+        b.aux.map(function (x) { return '<div class="tf-formula-math" data-tex="' + esc(x) + '"></div>'; }).join("") + "</div>";
+    }).join("");
+    $("formulas").querySelectorAll("[data-tex]").forEach(function (el) { renderTexInto(el, el.getAttribute("data-tex")); });
   }
 
   // ----------------------------------------------------------------- errors
@@ -101,6 +131,7 @@
     setText("status", d.n + " pontos · " + ms.toFixed(1).replace(".", ",") + " ms");
     if (dims) applyDimensionUi(d.planar);
     setText("badge-class", label);
+    scheduleFormulas();
     setText("badge-dim", d.planar ? "2D" : "3D");
     var slider = $("dock-slider");
     slider.max = d.n - 1;
@@ -137,6 +168,7 @@
       l.hidden = (l.dataset.only === "3d" && planar) || (l.dataset.only === "2d" && !planar);
     });
     $("row-sigma").hidden = planar; $("row-B").hidden = planar;
+    $("btn-proj").hidden = planar;                    // 2D is already a parallel projection
     var items = [["", "r(s)"], ["tf-dot--t", "T"], ["tf-dot--n", "N"]];
     if (!planar) items.push(["tf-dot--b", "B"]);
     items.push(["tf-dot--p", "círculo osculador"], ["tf-dot--e", "evoluta"], ["tf-dot--i", "involuta"]);
@@ -180,6 +212,8 @@
     $("in-n").value = state.n; setText("out-n", String(state.n));
     $("in-sub").value = String(state.sub);
     $("in-lw").value = state.lw; setText("out-lw", String(state.lw));
+    $("btn-proj").setAttribute("aria-pressed", String(!!state.ortho));
+    if (viewer) viewer.setOrtho(state.ortho);
     syncParams();
   }
 
@@ -241,6 +275,7 @@
     if (currentView() !== "painel") return;
     var q = new URLSearchParams({ k: state.k, t: state.t, s0: state.s0, s1: state.s1, n: state.n, sub: state.sub,
       a: state.params[0], b: state.params[1], c: state.params[2] });
+    if (state.ortho) q.set("proj", "ortho");
     history.replaceState(null, "", "#/painel?" + q.toString());
   }
   function applyQuery(qs) {
@@ -251,6 +286,7 @@
     state.n = Math.max(50, Math.min(10000, Math.round(num("n", state.n))));
     state.sub = [1, 2, 4, 8].indexOf(num("sub", state.sub)) >= 0 ? num("sub", state.sub) : state.sub;
     state.params = [num("a", state.params[0]), num("b", state.params[1]), num("c", state.params[2])];
+    state.ortho = q.get("proj") === "ortho";
     syncInputs();
   }
 
@@ -380,6 +416,12 @@
       speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; e.currentTarget.textContent = speed + "×";
     });
     $("btn-fit").addEventListener("click", function () { viewer.resetView(); });
+    $("btn-proj").addEventListener("click", function () {
+      state.ortho = !state.ortho;
+      $("btn-proj").setAttribute("aria-pressed", String(state.ortho));
+      viewer.setOrtho(state.ortho);
+      scheduleHash();
+    });
     document.addEventListener("keydown", function (e) {
       if (currentView() !== "painel" || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.target.tagName)) return;
       if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
@@ -396,6 +438,7 @@
       var start = performance.now();
       (function step(now) { viewer.resize(); if (now - start < 340) requestAnimationFrame(step); })(start);
     }
+    $("panel-formulas").addEventListener("toggle", renderFormulas);
     $("sidebar-toggle-btn").addEventListener("click", function () { setSidebar(true); });
     $("sidebar-expand-btn").addEventListener("click", function () { setSidebar(false); });
 
@@ -408,6 +451,9 @@
     renderTex();
   }
 
-  Tr.App = { renderTex: renderTex, state: state, get model() { return model; }, get viewer() { return viewer; }, recompute: recompute };
+  // called when KaTeX finishes loading: typeset everything, including the generated formulas
+  function renderAllTex() { renderTex(); formulaDirty = true; renderFormulas(); }
+
+  Tr.App = { renderTex: renderAllTex, state: state, get model() { return model; }, get viewer() { return viewer; }, recompute: recompute };
   init();
 })();

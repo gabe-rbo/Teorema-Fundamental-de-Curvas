@@ -1,0 +1,29 @@
+<!-- @dsCard group="Actions" height=190 subtitle="Floating transport, scrubber and s readout" -->
+<!doctype html><meta charset="utf-8">
+
+<body style="margin:0;background:var(--canvas)"><div class="tf-root" style="padding:20px;background:var(--canvas)">
+<div style="display:flex;flex-direction:column;gap:24px;align-items:center;padding:12px 0"><div class="tf-dock">
+  <div class="tf-transport">
+    <button class="tf-dockbtn" aria-label="Início" title="Início (s₀)"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.8 8z"/></svg></button>
+    <button class="tf-dockbtn" aria-label="Passo anterior"><svg viewBox="0 0 16 16"><path d="M11.5 3v10L4.5 8z"/></svg></button>
+    <button class="tf-dockbtn tf-dockbtn--play" aria-label="Reproduzir"><svg viewBox="0 0 16 16"><path d="M4.5 2.6v10.8L13 8z"/></svg></button>
+    <button class="tf-dockbtn" aria-label="Próximo passo"><svg viewBox="0 0 16 16"><path d="M4.5 3v10l7-5z"/></svg></button>
+    <button class="tf-dockbtn" aria-label="Fim" title="Fim (s₁)"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3l7.2 5L3 13z"/></svg></button>
+  </div>
+  <div class="tf-scrub"><span class="tf-rail"></span><span class="tf-fill" style="width:56%"></span><span class="tf-ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><input type="range" min="0" max="100" value="56" aria-label="Comprimento de arco s"></div>
+  <div class="tf-sread"><span class="tf-s-var">s</span><span>=</span><span class="tf-s-val">1.800</span><span class="tf-s-max">/ 3.200</span></div>
+  <button class="tf-speed" aria-label="Velocidade">1×</button>
+</div><div class="tf-dock">
+  <div class="tf-transport">
+    <button class="tf-dockbtn" aria-label="Início" title="Início (s₀)"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.8 8z"/></svg></button>
+    <button class="tf-dockbtn" aria-label="Passo anterior"><svg viewBox="0 0 16 16"><path d="M11.5 3v10L4.5 8z"/></svg></button>
+    <button class="tf-dockbtn tf-dockbtn--play" aria-label="Reproduzir"><svg viewBox="0 0 16 16"><path d="M4.5 2.6v10.8L13 8z"/></svg></button>
+    <button class="tf-dockbtn" aria-label="Próximo passo"><svg viewBox="0 0 16 16"><path d="M4.5 3v10l7-5z"/></svg></button>
+    <button class="tf-dockbtn" aria-label="Fim" title="Fim (s₁)"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3l7.2 5L3 13z"/></svg></button>
+  </div>
+  <div class="tf-scrub"><span class="tf-rail"></span><span class="tf-fill" style="width:0%"></span><span class="tf-ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><input type="range" min="0" max="100" value="0" aria-label="Comprimento de arco s"></div>
+  <div class="tf-sread"><span class="tf-s-var">s</span><span>=</span><span class="tf-s-val">0.000</span><span class="tf-s-max">/ 3.200</span></div>
+  <button class="tf-speed" aria-label="Velocidade">2×</button>
+</div></div>
+</div>
+<script>document.querySelectorAll(".tf-scrub input").forEach(function(i){var f=i.parentNode.querySelector(".tf-fill");i.addEventListener("input",function(){f.style.width=i.value+"%"})});</script></body>

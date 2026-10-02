@@ -1877,6 +1877,17 @@ def export_interactive_html(
         f'onchange="toggleTraceVisibility({idx}, this.checked)"><span class="tf-switch-track"></span></span></label>'
         for name, dot, idx, chk in switches
     )
+    proj_button = (
+        ""
+        if is_planar
+        else (
+            '<button id="btn-dock-proj" class="tf-dockbtn" aria-pressed="false" '
+            'aria-label="Projeção axonométrica (sem ponto de fuga)" '
+            'title="Projeção axonométrica (sem ponto de fuga)">'
+            '<svg viewBox="0 0 16 16" style="fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round">'
+            '<path d="M8 1.5l5.5 3v7L8 14.5l-5.5-3v-7zM8 8l5.5-3.5M8 8v6.5M8 8L2.5 4.5"/></svg></button>'
+        )
+    )
     legend_markup = "".join(
         f'<span><span class="tf-dot {dot}"></span>{label}</span>' for dot, label in legend_items
     )
@@ -1940,6 +1951,7 @@ var isPlaying = false;
 var playTimer = null;
 var lastTick = null;
 var animSpeed = 1.0;
+var isOrtho = false;
 var ICON_PLAY = '<path d="M4.5 2.6v10.8L13 8z"/>';
 var ICON_PAUSE = '<path d="M4 2.8h2.8v10.4H4zM9.2 2.8H12v10.4H9.2z"/>';
 var ICON_MOON = '<path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6z"/>';
@@ -2089,7 +2101,11 @@ function syncLiveView(gd) {{
       }});
     }} else {{
       var scene = gd._fullLayout.scene._scene;
-      if (scene && scene.getCamera) gd.layout.scene.camera = scene.getCamera();
+      if (scene && scene.getCamera) {{
+        gd.layout.scene.camera = scene.getCamera();
+        // keep the projection chosen with the dock button across frame updates
+        gd.layout.scene.camera.projection = {{ type: isOrtho ? "orthographic" : "perspective" }};
+      }}
     }}
   }} catch (e) {{}}
 }}
@@ -2217,6 +2233,16 @@ function applyTheme(name) {{
   TRACE_ROLES.forEach(function(role, idx) {{ restyleRole(gd, idx, role, th.traces[role]); }});
 }}
 
+// Axonometric (orthographic) projection: parallel projection, no vanishing point.
+function toggleProjection() {{
+  var gd = document.getElementById("fundamental_curve_plot");
+  var btn = document.getElementById("btn-dock-proj");
+  if (!gd || isPlanar) return;
+  isOrtho = !isOrtho;
+  if (btn) btn.setAttribute("aria-pressed", String(isOrtho));
+  Plotly.relayout(gd, {{ "scene.camera.projection.type": isOrtho ? "orthographic" : "perspective" }});
+}}
+
 function toggleTheme() {{
   var current = document.documentElement.getAttribute("data-theme") || "light";
   applyTheme(current === "light" ? "dark" : "light");
@@ -2299,6 +2325,8 @@ function initDockAndSidebar() {{
   if (btnNext) btnNext.addEventListener("click", function() {{ goToFrame(curFrame + 1); }});
   var btnLast = document.getElementById("btn-dock-last");
   if (btnLast) btnLast.addEventListener("click", function() {{ goToFrame(totalFrames - 1); }});
+  var btnProj = document.getElementById("btn-dock-proj");
+  if (btnProj) btnProj.addEventListener("click", toggleProjection);
   var btnSpeed = document.getElementById("btn-dock-speed");
   if (btnSpeed) btnSpeed.addEventListener("click", function() {{ setPlaybackSpeed(this); }});
 
@@ -2466,6 +2494,11 @@ if (document.readyState === "loading") {{
     .modebar-container:hover {{
       opacity: 1;
     }}
+    .tf-dockbtn[aria-pressed="true"] {{
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }}
     .tf-scrub {{
       width: 190px;
     }}
@@ -2517,6 +2550,7 @@ if (document.readyState === "loading") {{
           </div>
 
           <button id="btn-dock-speed" class="tf-speed" aria-label="Velocidade da reprodução" title="Velocidade da reprodução">1×</button>
+          {proj_button}
         </div>
       </div>
     </main>
