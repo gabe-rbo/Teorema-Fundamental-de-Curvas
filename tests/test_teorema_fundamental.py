@@ -32,8 +32,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-ENGINE_PATH = PROJECT_ROOT / "curva_engine.py"
-VIZ_PATH = PROJECT_ROOT / "curva_viz.py"
+ENGINE_PATH = PROJECT_ROOT / "src" / "curva_engine.py"
+VIZ_PATH = PROJECT_ROOT / "src" / "curva_viz.py"
 CLI_PATH = PROJECT_ROOT / "teorema-fundamental-curvas.py"
 
 

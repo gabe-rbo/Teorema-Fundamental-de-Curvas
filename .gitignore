@@ -34,3 +34,7 @@ dist/
 .agents/
 .agents/teamwork/
 
+# Ignore generated HTML output files, except the website (index.html) and its template
+*.html
+!index.html
+!web/template.html

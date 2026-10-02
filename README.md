@@ -16,6 +16,53 @@ Uma ferramenta computacional e acadêmica em Python que reconstrói curvas plana
 
 ---
 
+## Site interativo
+
+O repositório traz um site que roda **inteiro no navegador**, sem servidor Python:
+
+- **Painel interativo:** digite $\kappa(s)$ e $\tau(s)$ (com `s`, parâmetros `a`, `b`, `c`, `pi`, `e` e as funções `sin cos tan exp log sqrt sinh cosh tanh asin acos atan abs`), mude o intervalo $[s_0, s_1]$, o número de pontos e a precisão, e veja a curva se atualizar em tempo real. Os parâmetros `a`, `b`, `c` têm sliders. A curvatura pode mudar de sinal (curvas planas com pontos de inflexão). O estado fica na URL, então qualquer curva pode ser compartilhada por link.
+- **Galeria de curvas:** 32 curvas prontas com miniaturas ao vivo; clicar em uma abre a curva no painel para editar.
+- **Leve:** um único recálculo por quadro, expressões compiladas uma vez, canvas em duas camadas (curvas estáticas e aparato por quadro) e miniaturas desenhadas só quando visíveis. Com 5000 pontos, arrastar um slider custa cerca de 4 ms por atualização e um quadro de reprodução, menos de 1 ms.
+- **Motor em JavaScript:** triedro de Frenet integrado pelo método de Magnus de 4ª ordem (ortonormal por construção) e derivadas exatas por séries de Taylor, validado contra o motor Python em `tests/test_js_engine_parity.py`.
+
+**Como abrir:** dê um duplo clique em [`index.html`](index.html), na raiz. É o site inteiro em um único arquivo (CSS e scripts embutidos) e funciona em qualquer navegador, sem servidor.
+
+**Como editar:** o código-fonte do site fica em `web/` (`template.html`, `css/`, `js/`) e no `design-system/`. O `index.html` da raiz é gerado a partir deles; depois de editar qualquer um, rode:
+
+```bash
+python3 web/build.py
+```
+
+Um teste (`tests/test_app_bundle.py`) falha se o `index.html` estiver desatualizado. Os testes do motor JavaScript rodam com `node --test tests/js` e também dentro do `pytest`, se o Node estiver instalado.
+
+### Publicar no GitHub Pages
+
+1. No GitHub, abra o repositório e vá em **Settings → Pages**.
+2. Em **Build and deployment → Source**, escolha **Deploy from a branch**.
+3. Em **Branch**, selecione **`main`** e a pasta **`/ (root)`**, e clique em **Save**.
+4. Aguarde cerca de 1 minuto (a aba **Actions** mostra o andamento). O site fica em `https://gabe-rbo.github.io/Teorema-Fundamental-de-Curvas/`.
+5. Para o link aparecer no repositório: na página inicial do repositório, clique na engrenagem ao lado de **About**, marque **Use your GitHub Pages website** (ou cole a URL em **Website**) e salve.
+
+Como o `index.html` fica na raiz e é autossuficiente, não é preciso nenhuma configuração extra. A cada `git push` na `main`, o site é atualizado sozinho.
+
+### Estrutura do repositório
+
+```
+.
+├── index.html                      # o site (arquivo único, gerado por web/build.py)
+├── teorema-fundamental-curvas.py   # CLI: gera um visualizador HTML pelo terminal
+├── README.md  LICENSE  requirements.txt
+├── src/                            # motor matemático e visualizador Plotly usados pela CLI
+│   ├── curva_engine.py
+│   └── curva_viz.py
+├── web/                            # código-fonte do site (template.html, css/, js/, build.py)
+├── design-system/                  # tokens, componentes e tema Plotly (Triedro)
+├── tests/                          # testes em Python e em Node
+└── docs/                           # notas da infraestrutura de testes
+```
+
+---
+
 ## Sumário
 1. [Fundamentação Teórica](#fundamentação-teórica)
    - [Enunciado do Teorema Fundamental das Curvas Espaciais](#enunciado-do-teorema-fundamental-das-curvas-espaciais)
@@ -383,7 +430,7 @@ O projeto segue rigorosos princípios de separação de responsabilidades e robu
               ┌──────────────┴──────────────┐
               ▼                             ▼
 ┌───────────────────────────┐ ┌───────────────────────────┐
-│      curva_engine.py      │ │       curva_viz.py        │
+│    src/curva_engine.py    │ │     src/curva_viz.py      │
 │  - Whitelist AST Segura   │ │  - 10-Trace 3D Scene      │
 │  - SymPy / NumPy Lambdify │ │  - Full-screen HTML Shell │
 │  - solve_ivp (DOP853/RK45)│ │  - Custom JS Injection    │
@@ -395,7 +442,7 @@ O projeto segue rigorosos princípios de separação de responsabilidades e robu
 ### Módulos do Sistema e Responsabilidades
 
 - **`teorema-fundamental-curvas.py`**: Ponto de entrada CLI (*Command Line Interface*), suportando argumentos posicionais e flags opcionais (`-k`, `-t`, `-i`, `-n`, `-o`), validação rigorosa de limites de intervalo contra injeção de código, chaveamento automático de relatório entre reconstrução 2D e 3D, tratamento de exceções amigável ao usuário e códigos de saída semânticos (0, 1, 2).
-- **`curva_engine.py`**: Motor analítico e numérico contendo:
+- **`src/curva_engine.py`**: Motor analítico e numérico contendo:
   - *Análise Segura de Expressões (AST Whitelist)*: Bloqueio estrito de chamadas a `__import__`, `eval`, `exec` ou acesso a atributos privados, autorizando apenas operações aritméticas e funções transcendentais válidas.
   - *Pré-checagem de Singularidades*: Verificação analítica e numérica prévia de divisões por zero ou singularidades no domínio de integração.
   - *Reconstrução Planar por Quadratura (`reconstruct_plane_curve`)*: Quando $\tau(s) \equiv 0$, calcula diretamente o ângulo tangente $\theta(s) = \int \kappa(u)\,du$ e a trajetória $r(s) = \int (\cos\theta, \sin\theta)\,du$ via regra de Simpson cumulativa com interpolação `CubicSpline`, sem invocar integradores de EDOs.
@@ -403,7 +450,7 @@ O projeto segue rigorosos princípios de separação de responsabilidades e robu
   - *Preservação da Estrutura $SO(3)$*: Ortonormalização contínua de Gram-Schmidt Modificado restaurando a binormal por $B = T \times N$ e garantindo $\det(F(s)) = +1$ e $\|T\|=\|N\|=\|B\|=1$ a cada passo.
   - *Classificador Determinístico*: Identificação exata da geometria intrínseca em 8 classes.
   - *Geração de Nomenclatura Higienizada*: Formatação padronizada e segura de nomes de arquivo.
-- **`curva_viz.py`**: Gerador da cena interativa em Plotly:
+- **`src/curva_viz.py`**: Gerador da cena interativa em Plotly:
   - *Modo Dual Automático*: Dispatcher `build_curve_figure` que constrói cena cartesiana 2D para curvas planas ou cena WebGL 3D para curvas espaciais.
   - *Cena Planar 2D (7 Traços)*: Curva, Ponto Ativo, Vetores $\{T, N\}$, Retas Tangente e Normal, e Círculo Osculador com proporção rígida 1:1 (`scaleanchor="x", scaleratio=1`).
   - *Cena Espacial 3D (10 Traços)*: Curva, Ponto Ativo, Triedro unitário $\{T, N, B\}$, Reta Tangente, Planos Osculador, Normal e Retificante, e Círculo Osculador 3D.
