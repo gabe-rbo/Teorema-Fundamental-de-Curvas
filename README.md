@@ -35,16 +35,6 @@ python3 web/build.py
 
 Um teste (`tests/test_app_bundle.py`) falha se o `index.html` estiver desatualizado. Os testes do motor JavaScript rodam com `node --test tests/js` e também dentro do `pytest`, se o Node estiver instalado.
 
-### Publicar no GitHub Pages
-
-1. No GitHub, abra o repositório e vá em **Settings → Pages**.
-2. Em **Build and deployment → Source**, escolha **Deploy from a branch**.
-3. Em **Branch**, selecione **`main`** e a pasta **`/ (root)`**, e clique em **Save**.
-4. Aguarde cerca de 1 minuto (a aba **Actions** mostra o andamento). O site fica em `https://gabe-rbo.github.io/Teorema-Fundamental-de-Curvas/`.
-5. Para o link aparecer no repositório: na página inicial do repositório, clique na engrenagem ao lado de **About**, marque **Use your GitHub Pages website** (ou cole a URL em **Website**) e salve.
-
-Como o `index.html` fica na raiz e é autossuficiente, não é preciso nenhuma configuração extra. A cada `git push` na `main`, o site é atualizado sozinho.
-
 ### Estrutura do repositório
 
 ```
